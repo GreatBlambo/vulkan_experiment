@@ -1,4 +1,5 @@
 #include "vulkan_app.h"
+#include "vulkan_utils.h"
 #include "utils.h"
 
 #include <stdlib.h>
@@ -6,12 +7,14 @@
 #include <assert.h>
 #include <string.h>
 
+#include <algorithm>
+
 static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT      message_severity,
                                                      VkDebugUtilsMessageTypeFlagsEXT             message_type,
                                                      const VkDebugUtilsMessengerCallbackDataEXT* p_callback_data,
                                                      void*                                       p_user_data)
 {
-    char* prefix = "Validation layer: %s";
+    const char* prefix = "Validation layer: %s";
     if (message_type == VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT)
         prefix = "Performance issue from validation layer: %s";
 
@@ -55,10 +58,10 @@ static void vkDestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMes
     }
 }
 
-static void enable_validation_layers(VkInstanceCreateInfo& create_info, const VulkanExtensionInfo* extension_info)
+static void enable_validation_layers(VkInstanceCreateInfo& create_info, const VulkanExtensionInfo& extension_info)
 {
     // Check for validation layers
-    if (!extension_info || extension_info->num_validation_layers <= 0)
+    if (extension_info.validation_layers.size() <= 0)
     {
         create_info.enabledLayerCount = 0;
         return;
@@ -70,12 +73,12 @@ static void enable_validation_layers(VkInstanceCreateInfo& create_info, const Vu
     VkLayerProperties* supported_layers = (VkLayerProperties*) malloc(sizeof(VkLayerProperties) * vl_count);
     vkEnumerateInstanceLayerProperties(&vl_count, supported_layers);
 
-    for (size_t i = 0; i < extension_info->num_validation_layers; i++)
+    for (size_t i = 0; i < extension_info.validation_layers.size(); i++)
     {
         bool supported = false;
         for (size_t j = 0; j < vl_count; j++)
         {
-            if (strcmp(supported_layers[j].layerName, extension_info->validation_layers[i]) == 0)
+            if (strcmp(supported_layers[j].layerName, extension_info.validation_layers[i]) == 0)
             {
                 supported = true;
                 break;
@@ -84,17 +87,32 @@ static void enable_validation_layers(VkInstanceCreateInfo& create_info, const Vu
 
         if (!supported)
         {
-            fprintf(stderr, "Error: validation layer %s is not supported\n", extension_info->validation_layers[i]);
+            fprintf(stderr, "Error: validation layer %s is not supported\n", extension_info.validation_layers[i]);
             exit(1);
         }
     }
 
-    create_info.enabledLayerCount   = extension_info->num_validation_layers;
-    create_info.ppEnabledLayerNames = extension_info->validation_layers;
+    create_info.enabledLayerCount   = extension_info.validation_layers.size();
+    create_info.ppEnabledLayerNames = extension_info.validation_layers.data();
     free(supported_layers);
 }
 
-static VkInstance create_instance(const char* name, const VulkanExtensionInfo* extension_info)
+static void add_extensions(VkInstanceCreateInfo& create_info, VulkanExtensionInfo& extension_info)
+{
+    // Get extensions
+    uint32_t     req_extension_count = 0;
+    const char** req_extensions      = glfwGetRequiredInstanceExtensions(&req_extension_count);
+
+    for (uint32_t i = 0; i < req_extension_count; i++)
+    {
+        extension_info.instance_extensions.push_back(req_extensions[i]);
+    }
+
+    create_info.enabledExtensionCount   = extension_info.instance_extensions.size();
+    create_info.ppEnabledExtensionNames = extension_info.instance_extensions.data();
+}
+
+static VkInstance create_instance(const char* name, VulkanExtensionInfo& extension_info)
 {
     // Create application info
     VkApplicationInfo app_info  = {};
@@ -110,38 +128,19 @@ static VkInstance create_instance(const char* name, const VulkanExtensionInfo* e
     create_info.sType                = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     create_info.pApplicationInfo     = &app_info;
 
-    // TODO: Create debug callback
-
+    // Enable validation layers
     create_info.enabledLayerCount = 0;
     enable_validation_layers(create_info, extension_info);
 
-    // Get extensions
-    bool         has_extensions      = extension_info && extension_info->extensions;
-    uint32_t     req_extension_count = 0;
-    const char** req_extensions      = glfwGetRequiredInstanceExtensions(&req_extension_count);
-
-    const uint32_t enabled_extension_count = has_extensions ? extension_info->num_extensions : 0;
-    const uint32_t extension_count         = req_extension_count + enabled_extension_count;
-
-    const char** extensions = (const char**) malloc(sizeof(const char*) * extension_count);
-    memcpy(extensions, req_extensions, sizeof(const char*) * req_extension_count);
-    if (has_extensions)
-    {
-        memcpy(&extensions[req_extension_count], extension_info->extensions,
-               sizeof(const char*) * enabled_extension_count);
-    }
-
-    create_info.enabledExtensionCount   = extension_count;
-    create_info.ppEnabledExtensionNames = extensions;
+    // Add extensions
+    add_extensions(create_info, extension_info);
 
     // Create instance
     VkInstance instance;
     if (vkCreateInstance(&create_info, NULL, &instance) != VK_SUCCESS)
     {
-        RUNTIME_ERROR("Failed dto create instance");
+        RUNTIME_ERROR("Failed to create instance");
     }
-
-    free(extensions);
 
     return instance;
 }
@@ -172,29 +171,112 @@ static VkDebugUtilsMessengerEXT create_debug_messenger(VkInstance instance, cons
 #endif
 }
 
-static VkPhysicalDevice pick_physical_device(VkInstance instance)
+static const VulkanPhysicalDevice* pick_physical_device(VkInstance instance, const VulkanExtensionInfo& extension_info,
+                                                        VkSurfaceKHR surface, std::vector< VulkanPhysicalDevice >& out_gpus)
 {
+    // Populate physical device information
     uint32_t device_count = 0;
-    vkEnumeratePhysicalDevices(instance, &device_count, NULL);
+    VK_CHECK(vkEnumeratePhysicalDevices(instance, &device_count, NULL));
 
-    assert(device_count > 0);
+    ASSERT(device_count > 0);
 
-    VkPhysicalDevice* devices = (VkPhysicalDevice*) malloc(sizeof(VkPhysicalDevice) * device_count);
-    vkEnumeratePhysicalDevices(instance, &device_count, devices);
+    std::vector< VkPhysicalDevice > devices(device_count);
+    VK_CHECK(vkEnumeratePhysicalDevices(instance, &device_count, devices.data()));
 
-    uint32_t         max_score   = 0;
-    VkPhysicalDevice best_device = VK_NULL_HANDLE;
+    out_gpus.resize(device_count);
     for (size_t i = 0; i < device_count; i++)
     {
+        VulkanPhysicalDevice& gpu = out_gpus[i];
+
+        gpu.vk_physical_device = devices[i];
+        // Get physical device properties
+        vkGetPhysicalDeviceProperties(gpu.vk_physical_device, &gpu.vk_physical_device_props);
+
+        // Get physical device vk_physical_device_features
+        vkGetPhysicalDeviceFeatures(gpu.vk_physical_device, &gpu.vk_physical_device_features);
+
+        // Get physical device memory properties
+        vkGetPhysicalDeviceMemoryProperties(gpu.vk_physical_device, &gpu.vk_physical_device_mem_props);
+
+        // Get supported device extensions
+        {
+            uint32_t num_extensions;
+            VK_CHECK(vkEnumerateDeviceExtensionProperties(gpu.vk_physical_device, NULL, &num_extensions, NULL));
+			ASSERT_MSG(num_extensions > 0, "vkEnumerateDeviceExtensionProperties returned zero extensions.");
+
+            gpu.vk_extension_props.resize(num_extensions);
+            VK_CHECK(vkEnumerateDeviceExtensionProperties(gpu.vk_physical_device, NULL, &num_extensions, gpu.vk_extension_props.data()));
+        }
+
+        // Get device queues
+        {
+            uint32_t num_queues;
+            vkGetPhysicalDeviceQueueFamilyProperties(gpu.vk_physical_device, &num_queues, NULL);
+			ASSERT_MSG(num_queues > 0, "vkGetPhysicalDeviceQueueFamilyProperties returned zero queue properties.");
+
+            gpu.vk_queue_props.resize(num_queues);
+            vkGetPhysicalDeviceQueueFamilyProperties(gpu.vk_physical_device, &num_queues, gpu.vk_queue_props.data());
+        }
+
+        // Get surface capabilities
+        VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu.vk_physical_device, surface, &gpu.vk_surface_capabilities));
+
+        // Get supported surface formats
+        {
+            uint32_t num_formats;
+			VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(gpu.vk_physical_device, surface, &num_formats, NULL));
+			ASSERT_MSG(num_formats > 0, "vkGetPhysicalDeviceSurfaceFormatsKHR returned zero surface formats.");
+
+            gpu.vk_surface_formats.resize(num_formats);
+            VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(gpu.vk_physical_device, surface, &num_formats, gpu.vk_surface_formats.data()));
+        }
+
+        // Get supported presentation modes
+        {
+            uint32_t num_presentation_modes;
+            VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(gpu.vk_physical_device, surface, &num_presentation_modes, NULL));
+            ASSERT_MSG(num_presentation_modes > 0, "vkGetPhysicalDeviceSurfacePresentModesKHR returned zero presentation modes.");
+
+            gpu.vk_presentation_modes.resize(num_presentation_modes);
+            VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(gpu.vk_physical_device, surface, &num_presentation_modes, gpu.vk_presentation_modes.data()));
+        }
+
+        LOG_DEBUG("Physical device detected: %s", gpu.vk_physical_device_props.deviceName);
+    }
+
+    // Pick physical device
+    uint32_t                    max_score   = 0;
+    const VulkanPhysicalDevice* best_device = NULL;
+    for (const VulkanPhysicalDevice& gpu : out_gpus)
+    {
+        // Check for required vk_physical_device_features
+        {
+            // Check extensions supported by device
+            std::string unsupported_extensions = "";
+            for (const char* extension : extension_info.device_extensions)
+            {
+                auto compare = [&extension](const VkExtensionProperties& extension_prop) {
+                    return strcmp(extension_prop.extensionName, extension) == 0;
+                };
+
+                if (std::find_if(gpu.vk_extension_props.begin(), gpu.vk_extension_props.end(), compare)
+                    == gpu.vk_extension_props.end())
+                {
+                    unsupported_extensions += extension;
+                    unsupported_extensions += ", ";
+                }
+            }
+
+            if (unsupported_extensions.length() > 0)
+            {
+                LOG_DEBUG("Skipping %s since it does not support extensions %s", gpu.vk_physical_device_props.deviceName,
+                          unsupported_extensions.data());
+                continue;
+            }
+        }
+
+        // Score device
         uint32_t score = 0;
-
-        VkPhysicalDeviceProperties properties;
-        vkGetPhysicalDeviceProperties(devices[i], &properties);
-
-        VkPhysicalDeviceFeatures features;
-        vkGetPhysicalDeviceFeatures(devices[i], &features);
-
-        LOG_DEBUG("Device detected: %s", properties.deviceName);
 
         struct
         {
@@ -202,29 +284,35 @@ static VkPhysicalDevice pick_physical_device(VkInstance instance)
             uint32_t geometry_shaders = 1;
         } support_priorities;
 
-        if (properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
+        if (gpu.vk_physical_device_props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
         {
             score += support_priorities.discrete_gpu;
         }
 
-        if (features.geometryShader)
+        if (gpu.vk_physical_device_features.geometryShader)
         {
             score += support_priorities.geometry_shaders;
         }
 
+        // Select device if it scores the best so far
         if (score >= max_score)
         {
             max_score   = score;
-            best_device = devices[i];
+            best_device = &gpu;
         }
     }
-
-    free(devices);
 
     return best_device;
 }
 
-VulkanApp vulkan_init(int width, int height, const char* name, const VulkanExtensionInfo* extension_info)
+static VkSurfaceKHR create_surface(VkInstance instance, GLFWwindow *window) 
+{
+    VkSurfaceKHR surface;
+    VK_CHECK(glfwCreateWindowSurface(instance, window, NULL, &surface));
+    return surface;
+}
+
+VulkanApp vulkan_init(int width, int height, const char* name, const VulkanExtensionInfo* p_extension_info)
 {
     glfwInit();
 
@@ -236,11 +324,18 @@ VulkanApp vulkan_init(int width, int height, const char* name, const VulkanExten
         RUNTIME_ERROR("Vulkan not supported!");
     }
 
+    VulkanExtensionInfo extension_info;
+    if (p_extension_info)
+    {
+        extension_info = *p_extension_info;
+    }
+
     VulkanApp new_app          = {};
     new_app.window             = glfwCreateWindow(width, height, name, NULL, NULL);
     new_app.vk_instance        = create_instance(name, extension_info);
     new_app.vk_debug_messenger = create_debug_messenger(new_app.vk_instance, NULL);
-    new_app.vk_physical_device = pick_physical_device(new_app.vk_instance);
+    new_app.vk_surface         = create_surface(new_app.vk_instance, new_app.window);
+    new_app.gpu                = pick_physical_device(new_app.vk_instance, extension_info, new_app.vk_surface, new_app.available_gpus);
 
     return new_app;
 }
@@ -251,6 +346,7 @@ void vulkan_deinit(VulkanApp* app)
     vkDestroyDebugUtilsMessengerEXT(app->vk_instance, app->vk_debug_messenger, NULL);
 #endif
 
+    vkDestroySurfaceKHR(app->vk_instance, app->vk_surface, NULL);
     vkDestroyInstance(app->vk_instance, NULL);
 
     glfwDestroyWindow(app->window);
