@@ -12,11 +12,11 @@ AlwaysBreakAfterDefinitionReturnType: None
 AlwaysBreakBeforeMultilineStrings: 'true'
 AlwaysBreakTemplateDeclarations: 'true'
 BreakBeforeBinaryOperators: All
-BreakBeforeBraces: Allman
+BreakBeforeBraces: Attach
 BreakBeforeTernaryOperators: 'true'
 BreakConstructorInitializersBeforeComma: 'true'
 BreakStringLiterals: 'true'
-ColumnLimit: '120'
+ColumnLimit: '100'
 ConstructorInitializerAllOnOneLineOrOnePerLine: 'false'
 Cpp11BracedListStyle: 'false'
 DerivePointerAlignment: 'false'

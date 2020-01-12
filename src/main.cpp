@@ -3,17 +3,17 @@
 
 int main()
 {
-    VulkanExtensionInfo extension_info;
+    VulkanDeviceConfig device_config;
     #ifdef APP_DEBUG
-        extension_info.validation_layers = std::vector<const char*>({
+        device_config.validation_layers = std::vector<const char*>({
             "VK_LAYER_LUNARG_standard_validation"
         });
     #endif
-    extension_info.instance_extensions = std::vector<const char*>({
+    device_config.instance_extensions = std::vector<const char*>({
         "VK_EXT_debug_utils"
     });
 
-    VulkanApp app = vulkan_init(800, 600, "App", &extension_info);
+    VulkanApp app = vulkan_init(800, 600, "App", device_config);
 
     while (!glfwWindowShouldClose(app.window))
     {

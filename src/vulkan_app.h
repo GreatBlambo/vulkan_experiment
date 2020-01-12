@@ -6,17 +6,18 @@
 
 #include <vector>
 
-struct VulkanExtensionInfo
+struct VulkanDeviceConfig
 {
     std::vector<const char*> validation_layers;
     std::vector<const char*> instance_extensions;
     std::vector<const char*> device_extensions;
+    VkPhysicalDeviceFeatures device_features = {};
 };
 
 struct VulkanPhysicalDevice
 {
-    int graphics_family_index;
-    int present_family_index;
+    int graphics_family_index = -1;
+    int present_family_index = -1;
 
     VkPhysicalDevice vk_physical_device;
     VkPhysicalDeviceProperties vk_physical_device_props;
@@ -39,9 +40,13 @@ struct VulkanApp
 
     const VulkanPhysicalDevice* gpu;
     std::vector<VulkanPhysicalDevice> available_gpus;
+
+    VkDevice device;
 };
 
-VulkanApp vulkan_init(int width, int height, const char* name, const VulkanExtensionInfo* extension_info = NULL);
+VulkanApp vulkan_init(int width, int height, const char* name,
+                      const VulkanDeviceConfig& in_device_config = {},
+                      const VkPhysicalDeviceFeatures& in_phys_device_features = {});
 void vulkan_deinit(VulkanApp* app);
 
 #endif
