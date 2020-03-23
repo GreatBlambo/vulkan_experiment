@@ -5,6 +5,14 @@
 namespace Utils
 {
 
+// Hash combine from boost
+template<typename T>
+inline void hash_combine(std::size_t& seed, const T& v)
+{
+    std::hash<T> hasher;
+    seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+}
+
 #define LOG(logtype, format, ...) \
     do \
     { \
@@ -31,6 +39,7 @@ namespace Utils
 #define ASSERT(cond) ASSERT_MSG(cond, "")
     
 #else
+#define LOG_DEBUG(format, ...)
 #define LOG_WARNING(format, ...)
 #define LOG_INFO(format, ...)
 
@@ -38,6 +47,8 @@ namespace Utils
 #define ASSERT_WARN(cond, msg, ...)
 #define ASSERT(cond)
 #endif
+
+#define IMPLEMENT_ME RUNTIME_ERROR("Function %s not implemented!", __func__);
 
 #define ARRAY_LENGTH(arr) (sizeof(arr) / sizeof(*arr))
 }
