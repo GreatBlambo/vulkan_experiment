@@ -10,7 +10,7 @@
             "name": "(lldb) Launch",
             "program": "${workspaceFolder}/app/vulkan_experiment.exe",
             "args": [],
-            "cwd": "${workspaceFolder}"
+            "cwd": "${workspaceFolder}/app"
         },
 
         {
@@ -38,9 +38,12 @@
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/app/vulkan_experiment.exe",
-            "args": [],
+            "args": [
+                "2>",
+                "${workspaceFolder}/app/logs/debug.log"
+            ],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}",
+            "cwd": "${workspaceFolder}/app",
             "environment": [],
             "externalConsole": false
         }

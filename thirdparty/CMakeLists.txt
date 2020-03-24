@@ -6,4 +6,5 @@ set(GLFW_INSTALL OFF CACHE BOOL "")
 
 add_subdirectory(glfw)
 
-
+add_subdirectory(physfs)
+set(PHYSFS_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/physfs/src" PARENT_SCOPE)

@@ -9,6 +9,10 @@
 #include <array>
 #include <unordered_set>
 
+#include <functional>
+
+#include <physfs.h>
+
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // Render Passes //////////////////////////////////////////////////////////////////////////////// 
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -90,15 +94,52 @@ static void destroy_render_passes(Vulkan::App& app, RenderPasses& render_passes)
 // Material Resources /////////////////////////////////////////////////////////////////////////// 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-STRONGLY_TYPED_WEAKREF(ShaderModule);
+// Material resources include any vulkan objects required to make a material.
+// The intention here is to allow the user to string together configurations on the fly and we will reuse
+// vulkan objects as necessary.
 
-struct MaterialResources {
+struct MaterialTable {
 };
 
-void create_material_resources(Vulkan::App& app, MaterialResources& material_resources) {
+void create_material_table(Vulkan::App& app, MaterialTable& material_table) {
 }
 
-void destroy_material_resources(Vulkan::App& app, MaterialResources& material_resources) {
+void destroy_material_table(Vulkan::App& app, MaterialTable& material_table) {
+}
+
+struct ShaderModuleInfo {
+    const char* name;
+    uint32_t* spirv_data;
+    size_t size;
+};
+
+// We can do these find_* functions even with create info structs which contain non-dispatchable handles because
+// in all likelihood if two handles have the same value, the implementation believes them to be equivalent. So
+// they aren't really collisions, in this case.
+
+VkPipelineLayout find_pipeline_layout(MaterialTable& material_table, const VkPipelineLayoutCreateInfo& create_info) {
+    return VK_NULL_HANDLE;
+}
+
+VkPipeline find_pipeline(MaterialTable& material_table, const VkGraphicsPipelineCreateInfo& create_info) {
+    return VK_NULL_HANDLE;
+}
+
+VkDescriptorSetLayout find_descriptor_set_layout(MaterialTable& material_table, const VkDescriptorSetLayoutCreateInfo& create_info) {
+    return VK_NULL_HANDLE;
+}
+
+VkPipeline create_pipeline(MaterialTable& material_table, ShaderModuleInfo* modules, size_t num_modules) {
+    for (size_t i = 0; i < num_modules; i++) {
+        const ShaderModuleInfo& module = modules[i];
+        // Check if any descriptor layouts can be reused
+    }
+
+    // Check if any pipeline layouts can be reused
+    //      If so, check if any pipelines can be reused.
+    //      If not, create pipeline layout and pipeline
+
+    return VK_NULL_HANDLE;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -187,10 +228,87 @@ static void render_frame(Vulkan::App& app, RenderPasses& render_passes) {
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
+// Files //////////////////////////////////////////////////////////////////////////////////////// 
+/////////////////////////////////////////////////////////////////////////////////////////////////
+
+struct FileResult {
+    const char* filename;
+    uint8_t* data;
+    size_t size;
+};
+
+void load_temp_file(const char* filename, std::function<void(const FileResult&)> on_file_load) {
+    int result = PHYSFS_exists(filename);
+    if (!result) {
+        RUNTIME_ERROR("Error loading %s", filename);
+    }
+
+    PHYSFS_file* file = PHYSFS_openRead(filename);
+    PHYSFS_sint64 file_size = PHYSFS_fileLength(file);
+
+    uint8_t* buffer = new uint8_t[file_size];
+    PHYSFS_read(file, buffer, 1, file_size);
+    PHYSFS_close(file); 
+
+    on_file_load({
+        filename,
+        buffer, 
+        (size_t) file_size
+    });
+    delete[] buffer;
+}
+
+void load_temp_files(const char** filenames, size_t num_files, std::function<void(const FileResult*, size_t)> on_files_load) {
+    std::vector<FileResult> results;
+    for (size_t i = 0; i < num_files; i++) {
+        const char* filename = filenames[i];
+        int result = PHYSFS_exists(filename);
+        if (!result) {
+            RUNTIME_ERROR("Error loading %s", filename);
+        }
+
+        PHYSFS_file* file = PHYSFS_openRead(filename);
+        PHYSFS_sint64 file_size = PHYSFS_fileLength(file);
+
+        uint8_t* buffer = new uint8_t[file_size];
+        PHYSFS_read(file, buffer, 1, file_size);
+        PHYSFS_close(file); 
+
+        results.push_back({
+            filename,
+            buffer,
+            (size_t) file_size
+        });
+    }
+
+    on_files_load(results.data(), results.size());
+
+    for (const FileResult& result : results) {
+        delete[] result.data;
+    }
+}
+
+void init_fs() {
+    PHYSFS_init(NULL);
+    if (!PHYSFS_mount("./shaders", "shaders", 1)) {
+        RUNTIME_ERROR("Failed to mount shaders folder");
+    }
+}
+
+void deinit_fs() {
+    PHYSFS_deinit();
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
 // App main ///////////////////////////////////////////////////////////////////////////////////// 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 int main() {
+    // TODO: Memory arenas
+    // Load external resources
+    init_fs();
+
+    // Configure vulkan app
     Vulkan::DeviceConfig device_config;
     device_config.validation_layers = std::vector< const char* >({ "VK_LAYER_KHRONOS_validation" });
     device_config.instance_extensions = std::vector< const char* >({ "VK_EXT_debug_utils" });
@@ -199,16 +317,47 @@ int main() {
 
     Vulkan::App& app = Vulkan::App::initialize(800, 600, "App", device_config);
 
+    // Create vulkan resources
+    MaterialTable material_table;
+    create_material_table(app, material_table);
+
+    // TEMP CODE
+    // This is what it would look like to create one pipeline from shader stages (and also additional settings)
+    // Can probably load this from a json eventually, make it data driven
+    VkPipeline pipeline;
+    const char* shader_files[] = {"shaders/test.vert.spv", "shaders/test.frag.spv"};
+    load_temp_files(shader_files, ARRAY_LENGTH(shader_files), [shader_files, &pipeline, &material_table](const FileResult* results, size_t num_results) {
+        ShaderModuleInfo test_shader_module[2];
+        test_shader_module[0].name = shader_files[0];
+        test_shader_module[0].spirv_data = (uint32_t*) results[0].data;
+        test_shader_module[0].size = results[0].size / sizeof(uint32_t);
+
+        test_shader_module[1].name = shader_files[1];
+        test_shader_module[1].spirv_data = (uint32_t*) results[1].data;
+        test_shader_module[1].size = results[1].size / sizeof(uint32_t);
+
+        pipeline = create_pipeline(material_table, test_shader_module, 2);
+    });
+
     RenderPasses render_passes;
     create_render_passes(app, render_passes);
 
+    // Render loop
     while (!glfwWindowShouldClose(app.window)) {
         glfwPollEvents();
         render_frame(app, render_passes);
     }
 
+    // Clean up resources
     destroy_render_passes(app, render_passes);
+
+    destroy_material_table(app, material_table);
+
+    // Deinit vulkan app
     Vulkan::App::deinit();
+
+    // Deinit fs
+    deinit_fs();
 
     return 0;
 }
