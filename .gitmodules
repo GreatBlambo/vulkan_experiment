@@ -4,3 +4,9 @@
 [submodule "thirdparty/physfs"]
 	path = thirdparty/physfs
 	url = https://github.com/criptych/physfs.git
+[submodule "thirdparty/rapidjson"]
+	path = thirdparty/rapidjson
+	url = git@github.com:Tencent/rapidjson.git
+[submodule "thirdparty/glm"]
+	path = thirdparty/glm
+	url = git@github.com:g-truc/glm.git
