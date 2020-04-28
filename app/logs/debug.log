@@ -1,3 +1,21 @@
 DEBUG ..\src\main.cpp::main, line 25: 1234
 DEBUG ..\src\main.cpp::main, line 50: 1234
-ERROR ..\src\main.cpp::main, line 53: Assertion failed: test5 < test2. 
+DEBUG ..\src\vulkan_app.cpp::App, line 639: Initializing vulkan app
+DEBUG ..\src\vulkan_app.cpp::create_instance, line 108: Creating instance
+DEBUG ..\src\vulkan_app.cpp::enable_validation_layers, line 59: Enabling validation layers
+DEBUG ..\src\vulkan_app.cpp::create_debug_messenger, line 142: Creating debug messenger
+DEBUG ..\src\vulkan_app.cpp::create_surface, line 377: Creating surface
+DEBUG ..\src\vulkan_app.cpp::pick_physical_device, line 197: Picking physical device
+DEBUG ..\src\vulkan_app.cpp::pick_physical_device, line 282: Physical device detected: GeForce GTX 1050
+DEBUG ..\src\vulkan_app.cpp::pick_physical_device, line 371: Physical device GeForce GTX 1050 chosen.
+DEBUG ..\src\vulkan_app.cpp::create_logical_device, line 390: Creating logical device
+DEBUG ..\src\vulkan_app.cpp::create_swapchain, line 474: Creating swapchain
+DEBUG ..\src\vulkan_app.cpp::create_swapchain, line 493: Graphics family index = 0, present family index = 2
+DEBUG ..\src\vulkan_app.cpp::create_swapchain, line 529: Creating swapchain image views
+DEBUG ..\src\vulkan_app.cpp::App, line 681: Vulkan app initialized
+ERROR ..\src\vulkan_app.cpp::debug_callback, line 52: Validation layer: Cannot call vkDestroyPipeline on VkPipeline 0x40fd720000000017[] that is currently in use by a command buffer. The Vulkan spec states: All submitted commands that refer to pipeline must have completed execution (https://www.khronos.org/registry/vulkan/specs/1.1-extensions/html/vkspec.html#VUID-vkDestroyPipeline-pipeline-00765)
+ERROR ..\src\vulkan_app.cpp::debug_callback, line 52: Validation layer: Cannot call vkDestroyRenderPass on VkRenderPass 0x51b3510000000014[] that is currently in use by a command buffer. The Vulkan spec states: All submitted commands that refer to renderPass must have completed execution (https://www.khronos.org/registry/vulkan/specs/1.1-extensions/html/vkspec.html#VUID-vkDestroyRenderPass-renderPass-00873)
+ERROR ..\src\vulkan_app.cpp::debug_callback, line 52: Validation layer: Cannot call vkDestroyFramebuffer on VkFramebuffer 0x6269300000000015[] that is currently in use by a command buffer. The Vulkan spec states: All submitted commands that refer to framebuffer must have completed execution (https://www.khronos.org/registry/vulkan/specs/1.1-extensions/html/vkspec.html#VUID-vkDestroyFramebuffer-framebuffer-00892)
+ERROR ..\src\vulkan_app.cpp::debug_callback, line 52: Validation layer: Cannot call vkDestroyFramebuffer on VkFramebuffer 0x3047930000000016[] that is currently in use by a command buffer. The Vulkan spec states: All submitted commands that refer to framebuffer must have completed execution (https://www.khronos.org/registry/vulkan/specs/1.1-extensions/html/vkspec.html#VUID-vkDestroyFramebuffer-framebuffer-00892)
+WARNING ..\src\vulkan_app.cpp::~App, line 697: CURRENTLY LEAKING RENDER PASSES
+WARNING ..\src\vulkan_app.cpp::~App, line 699: CURRENTLY LEAKING FRAMEBUFFERS
