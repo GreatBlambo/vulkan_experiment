@@ -8,6 +8,10 @@ namespace Utils
 
 // Hash combine from boost
 
+inline bool is_power_of_2(const size_t n) {
+    return n != 0 && (n & (n - 1)) == 0;
+}
+
 constexpr unsigned long djb2_hash(const char* str) {{
     return str[0] == 0 ? 0 : str[0] + (5381 * djb2_hash(str + 1));
 }}

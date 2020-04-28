@@ -82,9 +82,12 @@ void* Arena::push_onto_block(Arena::Block* block, size_t size, size_t align) {
 }
 
 void* Arena::push(size_t size, size_t align) {
-    if (align % 2 != 0) {
+    // If the alignment is not a power of 2, set it to 16
+    if (!Utils::is_power_of_2(align)) {
         align = 16;
     }
+
+    //Check if root block exists
     if (!root_block) {
         // No root block exists, append a new one
 
