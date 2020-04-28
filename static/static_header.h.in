@@ -1,0 +1,6 @@
+#pragma once
+
+const unsigned char* @STATIC_RESOURCE_NAME@();
+inline const size_t @STATIC_RESOURCE_NAME@_SIZE() {
+    return @STATIC_RESOURCE_SIZE@;
+}

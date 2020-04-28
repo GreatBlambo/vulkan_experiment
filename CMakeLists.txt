@@ -1,33 +1,42 @@
 cmake_minimum_required(VERSION 3.10.0)
-project(vulkan_experiment VERSION 0.1.0)
 
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
+# VCPKG config
+message("VCPKG_ROOT $ENV{VCPKG_ROOT}")
+if(DEFINED ENV{VCPKG_ROOT} AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
+    set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" CACHE STRING "")
+    message(" [INFO] VCPKG CMAKE_TOOLCHAIN_FILE = ${CMAKE_TOOLCHAIN_FILE}")
+endif()
 
-include(SPIR-V)
+# Project config
+set(PROJECT_NAME vulkan_experiment)
+
+project(${PROJECT_NAME} VERSION 0.1.0)
 
 include(CTest)
 enable_testing()
 
-find_package(Vulkan)
+list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
+
+find_package(Vulkan REQUIRED)
+find_package(assimp CONFIG REQUIRED)
 add_subdirectory(thirdparty)
+add_subdirectory(static)
+add_subdirectory(shaders)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS true)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/app)
 
 file(GLOB CPP_SOURCES "src/*.cpp")
-add_executable(vulkan_experiment ${CPP_SOURCES})
+add_executable(${PROJECT_NAME} ${CPP_SOURCES})
 
-target_include_directories(vulkan_experiment PRIVATE ${Vulkan_INCLUDE_DIRS} ${PHYSFS_INCLUDE_DIR})
-target_compile_definitions(vulkan_experiment PRIVATE $<$<CONFIG:DEBUG>:APP_DEBUG>)
-target_link_libraries(vulkan_experiment glfw ${Vulkan_LIBRARIES} physfs-static)
+target_include_directories(${PROJECT_NAME} PRIVATE ${Vulkan_INCLUDE_DIRS} ${PHYSFS_INCLUDE_DIR} ${RAPIDJSON_INCLUDE_DIR})
+target_compile_definitions(${PROJECT_NAME} PRIVATE $<$<CONFIG:DEBUG>:APP_DEBUG>)
 
-set(SHADER_DIR "src/shaders")
-file(GLOB SHADER_SOURCES "${SHADER_DIR}/*.vert" "${SHADER_DIR}/*.frag" "${SHADER_DIR}/*.geom" "${SHADER_DIR}/*.tesc" "${SHADER_DIR}/*.tese", "${SHADER_DIR}/*.comp")
-
-spirv_shader(
-    OUTPUT_DEST "${PROJECT_SOURCE_DIR}/app/shaders"
-    SRCS ${SHADER_SOURCES}
-)
+set(LIBS glfw ${Vulkan_LIBRARIES} physfs-static glm::glm assimp::assimp)
+if (${USING_STATIC_RESOURCES})
+    list(APPEND LIBS static_resources)
+endif()
+target_link_libraries(${PROJECT_NAME} ${LIBS})
 
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})
 set(CPACK_PROJECT_VERSION ${PROJECT_VERSION})

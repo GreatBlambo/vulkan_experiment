@@ -164,7 +164,7 @@ static VkDebugUtilsMessengerEXT create_debug_messenger(VkInstance               
 }
 
 static void find_queue_indices(PhysicalDevice& device, VkSurfaceKHR surface) {
-    // Find graphics queue
+    // Find queues
     for (int i = 0; i < device.vk_queue_props.size(); i++) {
         const VkQueueFamilyProperties& props = device.vk_queue_props[i];
 
@@ -172,25 +172,20 @@ static void find_queue_indices(PhysicalDevice& device, VkSurfaceKHR surface) {
             continue;
         }
 
-        if (props.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+        if (props.queueFlags & VK_QUEUE_GRAPHICS_BIT && device.graphics_family_index == -1) {
             device.graphics_family_index = i;
-            break;
-        }
-    }
-
-    // Find present queue
-    for (int i = 0; i < device.vk_queue_props.size(); i++) {
-        const VkQueueFamilyProperties& props = device.vk_queue_props[i];
-
-        if (props.queueCount == 0) {
             continue;
         }
 
         VkBool32 supports_present = false;
         vkGetPhysicalDeviceSurfaceSupportKHR(device.vk_physical_device, i, surface,
                                              &supports_present);
-        if (supports_present) {
+        if (supports_present && device.present_family_index == -1) {
             device.present_family_index = i;
+            continue;
+        }
+
+        if (device.graphics_family_index != -1 && device.present_family_index != -1) {
             break;
         }
     }
@@ -552,7 +547,7 @@ static void create_swapchain(App& app) {
             image_view_create_info.subresourceRange.baseMipLevel   = 0;
             image_view_create_info.subresourceRange.levelCount     = 1;
             image_view_create_info.subresourceRange.baseArrayLayer = 0;
-            image_view_create_info.subresourceRange.layerCount     = 0;
+            image_view_create_info.subresourceRange.layerCount     = 1;
         }
         image_view_create_info.flags = 0;
 
@@ -639,10 +634,7 @@ VkFormat App::default_depth_stencil_format() {
 }
 
 // Initialize global app
-
-static App g_vulkan_app = {};
-
-App& App::initialize(int width, int height, const char* name,
+App::App(int width, int height, const char* name,
                      const DeviceConfig& in_device_config) {
     LOG_DEBUG("Initializing vulkan app");
     static bool vulkan_initialized = false;
@@ -658,49 +650,47 @@ App& App::initialize(int width, int height, const char* name,
     }
 
     DeviceConfig device_config = in_device_config;
-    App&         app           = g_vulkan_app;
 
-    app.max_frames_in_flight = device_config.max_frames_in_flight == 0
+    max_frames_in_flight = device_config.max_frames_in_flight == 0
                                    ? VULKAN_DEFAULT_FRAMES_IN_FLIGHT
                                    : device_config.max_frames_in_flight;
 
-    app.max_rendering_frames = device_config.max_rendering_frames == 0
-                                   ? app.max_frames_in_flight
+    max_rendering_frames = device_config.max_rendering_frames == 0
+                                   ? max_frames_in_flight
                                    : device_config.max_rendering_frames;
 
-    app.window             = glfwCreateWindow(width, height, name, NULL, NULL);
-    app.vk_instance        = create_instance(name, device_config);
-    app.vk_debug_messenger = create_debug_messenger(app.vk_instance, NULL);
-    app.vk_surface         = create_surface(app.vk_instance, app.window);
-    app.gpu_index
-        = pick_physical_device(app.vk_instance, device_config, app.vk_surface, app.available_gpus);
-    PhysicalDevice& gpu = app.available_gpus[app.gpu_index];
-    app.device          = create_logical_device(gpu, device_config);
+    window             = glfwCreateWindow(width, height, name, NULL, NULL);
+    vk_instance        = create_instance(name, device_config);
+    vk_debug_messenger = create_debug_messenger(vk_instance, NULL);
+    vk_surface         = create_surface(vk_instance, window);
+    gpu_index
+        = pick_physical_device(vk_instance, device_config, vk_surface, available_gpus);
+    PhysicalDevice& gpu = available_gpus[gpu_index];
+    device          = create_logical_device(gpu, device_config);
 
-    vkGetDeviceQueue(app.device, gpu.graphics_family_index, 0, &app.graphics_queue);
-    vkGetDeviceQueue(app.device, gpu.present_family_index, 0, &app.present_queue);
+    vkGetDeviceQueue(device, gpu.graphics_family_index, 0, &graphics_queue);
+    vkGetDeviceQueue(device, gpu.present_family_index, 0, &present_queue);
 
-    app.command_pool = create_command_pool(app.device, gpu.graphics_family_index);
-    create_frame_resources(app);
+    command_pool = create_command_pool(device, gpu.graphics_family_index);
+    create_frame_resources(*this);
 
-    create_swapchain(app);
+    create_swapchain(*this);
 
     vulkan_initialized = true;
 
     LOG_DEBUG("Vulkan app initialized");
-    return app;
 }
 
-void App::deinit() {
-    vkQueueWaitIdle(g_vulkan_app.graphics_queue);
-    vkQueueWaitIdle(g_vulkan_app.present_queue);
-    for (size_t i = 0; i < g_vulkan_app.frame_resources.size(); i++) {
-        vkDestroyFence(g_vulkan_app.device, g_vulkan_app.frame_resources[i].draw_complete_fence,
+App::~App() {
+    vkQueueWaitIdle(graphics_queue);
+    vkQueueWaitIdle(present_queue);
+    for (size_t i = 0; i < frame_resources.size(); i++) {
+        vkDestroyFence(device, frame_resources[i].draw_complete_fence,
                        NULL);
-        vkDestroySemaphore(g_vulkan_app.device, g_vulkan_app.frame_resources[i].acquire_semaphore,
+        vkDestroySemaphore(device, frame_resources[i].acquire_semaphore,
                            NULL);
-        vkDestroySemaphore(g_vulkan_app.device,
-                           g_vulkan_app.frame_resources[i].draw_complete_semaphore, NULL);
+        vkDestroySemaphore(device,
+                           frame_resources[i].draw_complete_semaphore, NULL);
     }
 
     // TODO Delete render passes
@@ -708,21 +698,21 @@ void App::deinit() {
     // TODO Delete framebuffers
     LOG_WARNING("CURRENTLY LEAKING FRAMEBUFFERS");
 
-    vkDestroyCommandPool(g_vulkan_app.device, g_vulkan_app.command_pool, NULL);
-    for (size_t i = 0; i < g_vulkan_app.swapchain_images.size(); i++) {
-        vkDestroyImageView(g_vulkan_app.device, g_vulkan_app.swapchain_images[i].image_view, NULL);
+    vkDestroyCommandPool(device, command_pool, NULL);
+    for (size_t i = 0; i < swapchain_images.size(); i++) {
+        vkDestroyImageView(device, swapchain_images[i].image_view, NULL);
     }
-    vkDestroySwapchainKHR(g_vulkan_app.device, g_vulkan_app.swapchain, NULL);
-    vkDestroyDevice(g_vulkan_app.device, NULL);
+    vkDestroySwapchainKHR(device, swapchain, NULL);
+    vkDestroyDevice(device, NULL);
 #ifdef APP_DEBUG
-    vkDestroyDebugUtilsMessengerEXT(g_vulkan_app.vk_instance, g_vulkan_app.vk_debug_messenger,
+    vkDestroyDebugUtilsMessengerEXT(vk_instance, vk_debug_messenger,
                                     NULL);
 #endif
 
-    vkDestroySurfaceKHR(g_vulkan_app.vk_instance, g_vulkan_app.vk_surface, NULL);
-    vkDestroyInstance(g_vulkan_app.vk_instance, NULL);
+    vkDestroySurfaceKHR(vk_instance, vk_surface, NULL);
+    vkDestroyInstance(vk_instance, NULL);
 
-    glfwDestroyWindow(g_vulkan_app.window);
+    glfwDestroyWindow(window);
     glfwTerminate();
 }
 

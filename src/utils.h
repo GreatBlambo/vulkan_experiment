@@ -1,11 +1,17 @@
 #pragma once
 #include <cstdio>
 #include <iostream>
+#include <functional>
 
 namespace Utils
 {
 
 // Hash combine from boost
+
+constexpr unsigned long djb2_hash(const char* str) {{
+    return str[0] == 0 ? 0 : str[0] + (5381 * djb2_hash(str + 1));
+}}
+
 template<typename T>
 inline void hash_combine(std::size_t& seed, const T& v)
 {
@@ -48,7 +54,8 @@ inline void hash_combine(std::size_t& seed, const T& v)
 #define ASSERT(cond)
 #endif
 
-#define IMPLEMENT_ME RUNTIME_ERROR("Function %s not implemented!", __func__);
+#define IMPLEMENT_ME_DESC(feature_name, ...) RUNTIME_ERROR("Feature not implemented: " feature_name, ##__VA_ARGS__) 
+#define IMPLEMENT_ME RUNTIME_ERROR("Feature not implemented!");
 
 #define ARRAY_LENGTH(arr) (sizeof(arr) / sizeof(*arr))
 }

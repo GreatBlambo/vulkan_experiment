@@ -1,6 +1,25 @@
+#include <glm/glm.hpp>
+
 #include "vulkan_utils.h"
 
 #define VK_ERROR_STRING_CASE(x) case static_cast< int >( x ): return #x
+
+namespace Vulkan {
+
+TypeInfo get_type_info(Type type) {
+    switch (type) {
+        case Type::FLOAT: return { sizeof(float), VK_FORMAT_R32_SFLOAT, 1 };
+        case Type::VEC2: return { sizeof(glm::vec2), VK_FORMAT_R32G32_SFLOAT, 1 };
+        case Type::VEC3: return { sizeof(glm::vec3), VK_FORMAT_R32G32B32_SFLOAT, 1 };
+        case Type::VEC4:
+            return { sizeof(glm::vec4), VK_FORMAT_R32G32B32A32_SFLOAT, 1 };
+        case Type::MAT2: return { sizeof(glm::mat2), VK_FORMAT_R32G32_SFLOAT, 2 };
+        case Type::MAT3: return { sizeof(glm::mat3), VK_FORMAT_R32G32B32_SFLOAT, 3 };
+        case Type::MAT4:
+            return { sizeof(glm::mat4), VK_FORMAT_R32G32B32A32_SFLOAT, 4 };
+        default: return { 0, VK_FORMAT_UNDEFINED, 0 };
+    }
+}
 
 const char* vk_result_string(VkResult result)
 {
@@ -34,4 +53,5 @@ const char* vk_result_string(VkResult result)
         VK_ERROR_STRING_CASE(VK_RESULT_RANGE_SIZE);
         default: return "UNKNOWN";
     }
+}
 }

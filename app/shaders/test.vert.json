@@ -38,13 +38,90 @@
                     ]
                 }
             ]
+        },
+        "_17" : {
+            "name" : "UniformBufferObject",
+            "members" : [
+                {
+                    "name" : "model",
+                    "type" : "mat4",
+                    "offset" : 0,
+                    "matrix_stride" : 16
+                },
+                {
+                    "name" : "view",
+                    "type" : "mat4",
+                    "offset" : 64,
+                    "matrix_stride" : 16
+                },
+                {
+                    "name" : "proj",
+                    "type" : "mat4",
+                    "offset" : 128,
+                    "matrix_stride" : 16
+                }
+            ]
+        },
+        "_53" : {
+            "name" : "PushConstant",
+            "members" : [
+                {
+                    "name" : "push_mat4",
+                    "type" : "mat4",
+                    "offset" : 0,
+                    "matrix_stride" : 16
+                },
+                {
+                    "name" : "push_float",
+                    "type" : "float",
+                    "offset" : 64
+                }
+            ]
         }
     },
     "inputs" : [
         {
-            "type" : "vec4",
-            "name" : "position",
+            "type" : "vec2",
+            "name" : "inPosition",
             "location" : 0
+        },
+        {
+            "type" : "vec3",
+            "name" : "inColor",
+            "location" : 1
+        },
+        {
+            "type" : "vec2",
+            "name" : "inTexCoord",
+            "location" : 2
+        }
+    ],
+    "outputs" : [
+        {
+            "type" : "vec3",
+            "name" : "fragColor",
+            "location" : 0
+        },
+        {
+            "type" : "vec2",
+            "name" : "fragTexCoord",
+            "location" : 1
+        }
+    ],
+    "ubos" : [
+        {
+            "type" : "_17",
+            "name" : "UniformBufferObject",
+            "block_size" : 192,
+            "set" : 4,
+            "binding" : 0
+        }
+    ],
+    "push_constants" : [
+        {
+            "type" : "_53",
+            "name" : "_55",
+            "push_constant" : true
         }
     ]
 }

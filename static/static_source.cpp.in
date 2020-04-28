@@ -1,0 +1,4 @@
+const unsigned char* @STATIC_RESOURCE_NAME@() {
+    static unsigned char _@STATIC_RESOURCE_NAME@[] = @STATIC_RESOURCE_CONTENT@;
+    return _@STATIC_RESOURCE_NAME@;
+}

@@ -56,9 +56,8 @@ struct FrameResources
 
 struct App
 {
-    static App& initialize(int width, int height, const char* name,
-                           const DeviceConfig& in_device_config = {});
-    static void deinit();
+    App(int width, int height, const char* name, const DeviceConfig& in_device_config = {});
+    ~App();
 
     GLFWwindow* window;
     int         width;

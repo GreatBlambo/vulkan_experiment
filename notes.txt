@@ -1,0 +1,54 @@
+R1 --> A --> R2 --> S
+
+---
+
+R1 --> A --> R2 --> S
+R3 --> B __/
+
+R2 -> R1
+R2 -> R3
+
+---
+
+R1 --> A --> R2 --> S
+   \__ B __/
+
+R1 -> R2
+
+---
+
+R1 --> A --> R2 --> D --> R3 --> S
+  \\__ B __//
+   \__ C __/---> E
+
+---
+
+Attachments can only be written to by a single render pass
+
+If a render pass has no inputs, it's a level 1 render pass and all of its outputs
+are level 1
+
+If a render pass has inputs, its level is the max of the levels of its inputs
+
+Sort render passes by level
+
+Passes of the same level can be parallelized
+Passes with the same inputs and outputs can be combined
+
+---
+
+4/14
+
+Finished pipeline layout creation from reflection data, save for push constants.
+
+Push constants are tricky; any kind of solution would want something like a linker
+for multiple shader stages. I can ignore them for now, but in the future:
+
+On pipeline layout creation:
+- For every stage, extract the type names and members
+- If any type names match up between stages assert that the types are exactly 
+  the same.
+- Expose the type (ubo or push constant) as one through the material interface
+
+Need to do a test run. Create a render pass and pipeline _in code_ to see if the
+layout works.

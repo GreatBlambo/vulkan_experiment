@@ -2,27 +2,103 @@
 #include "vulkan_utils.h"
 #include "handle.h"
 #include "utils.h"
+#include "file_system.h"
+#include "material.h"
+#include "rendering.h"
+#include "memory.h"
 
 #include <vector>
 #include <algorithm>
-#include <queue>
-#include <array>
-#include <unordered_set>
 
-#include <functional>
-
-#include <physfs.h>
+#include <glm/glm.hpp>
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
-// Render Passes //////////////////////////////////////////////////////////////////////////////// 
+// App main /////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-struct RenderPasses {
+int main() {
+    Memory::Arena main_arena(GB(8));
+
+    int* test0 = main_arena.push<int>(1000000);
+
+    test0[999999] = 1234;
+    LOG_DEBUG("%d", test0[999999]);
+
+    int* test1 = main_arena.push<int>(1000000);
+    int* test2 = main_arena.push<int>(3000000);
+    int* test3 = main_arena.push<int>(10000);
+
+    ASSERT(test3 < test2);
+    ASSERT(test3 > test0);
+    ASSERT(test3 > test1);
+
+    main_arena.reset();
+    
+    int* n_test0 = main_arena.push<int>(1000000);
+    int* n_test1 = main_arena.push<int>(1000000);
+    int* n_test2 = main_arena.push<int>(3000000);
+    int* n_test3 = main_arena.push<int>(10000);
+
+    ASSERT(n_test0 == test0);
+    ASSERT(n_test1 == test1);
+    ASSERT(n_test2 == test2);
+    ASSERT(n_test3 == test3);
+
+    Memory::Arena secondary_arena(KB(1000), &main_arena);
+    int* test4 = secondary_arena.push<int>(1200);
+    test4[1199] = 1234;
+    LOG_DEBUG("%d", test4[1199]);
+
+    int* test5 = secondary_arena.push<int>(1000000);
+    ASSERT(test5 < test2);
+    ASSERT(test5 > test0);
+    ASSERT(test5 > test1);
+
+
+    // Load external resources
+    FileSystem::initialize("./");
+
+    // Configure vulkan app
+    Vulkan::DeviceConfig device_config;
+    device_config.validation_layers = std::vector< const char* >({ "VK_LAYER_KHRONOS_validation" });
+    device_config.instance_extensions = std::vector< const char* >({ "VK_EXT_debug_utils" });
+    device_config.device_extensions
+        = std::vector< const char* >({ VK_KHR_SWAPCHAIN_EXTENSION_NAME });
+
+    Vulkan::App app(1920, 1080, "App", device_config);
+
+    // Create vulkan resources
+    Vulkan::MaterialTable material_table(app);
+
+    // TEMP CODE
+    VkPipelineLayout pipeline_layout;
+
+    const char* shader_files[] = { "shaders/triangle.vert.spv", "shaders/triangle.vert.json",
+                                   "shaders/triangle.frag.spv", "shaders/triangle.frag.json" };
+
+    std::vector< Vulkan::ShaderModuleData > shader_module_data;
+    FileSystem::load_temp_files(
+        shader_files, ARRAY_LENGTH(shader_files),
+        [&shader_module_data, &material_table](const Memory::Buffer* results, size_t num_results) {
+            const Memory::Buffer& test_vert_spv_file  = results[0];
+            const Memory::Buffer& test_vert_json_file = results[1];
+            const Memory::Buffer& test_frag_spv_file  = results[2];
+            const Memory::Buffer& test_frag_json_file = results[3];
+
+            std::vector< Vulkan::SPIRVModuleFileData > module_file_data;
+            module_file_data.push_back({ test_vert_spv_file, test_vert_json_file });
+            module_file_data.push_back({ test_frag_spv_file, test_frag_json_file });
+
+            material_table.deserialize_module_data(module_file_data, shader_module_data);
+        });
+    pipeline_layout = material_table.create_pipeline_layout_from_modules(shader_module_data);
+
+    // Create render passes and framebuffers
+    // This is some temp code pretty much ripped from the vulkan tutorial. These
+    // will be in a render graph created from render pass configs
+
     std::vector< VkFramebuffer > swapchain_framebuffers;
-    VkRenderPass                 final_pass;
-};
-
-static void create_render_passes(Vulkan::App& app, RenderPasses& render_passes) {
+    VkRenderPass final_pass;
     // Create final render pass - this outputs to the swapchain
     {
         // Output color attachment for swapchain
@@ -56,11 +132,11 @@ static void create_render_passes(Vulkan::App& app, RenderPasses& render_passes) 
 
         // Create the final render pass
         VK_CHECK(vkCreateRenderPass(app.device, &final_pass_create_info, nullptr,
-                                    &render_passes.final_pass));
+                                    &final_pass));
     }
 
     // Create framebuffers
-    render_passes.swapchain_framebuffers.reserve(app.swapchain_images.size());
+    swapchain_framebuffers.reserve(app.swapchain_images.size());
     for (auto& swapchain_image : app.swapchain_images) {
         VkImageView& swapchain_image_view = swapchain_image.image_view;
 
@@ -68,7 +144,7 @@ static void create_render_passes(Vulkan::App& app, RenderPasses& render_passes) 
 
         VkFramebufferCreateInfo swapchain_framebuffer_create_info = {};
         swapchain_framebuffer_create_info.sType      = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-        swapchain_framebuffer_create_info.renderPass = render_passes.final_pass;
+        swapchain_framebuffer_create_info.renderPass = final_pass;
         swapchain_framebuffer_create_info.attachmentCount = ARRAY_LENGTH(attachments);
         swapchain_framebuffer_create_info.pAttachments    = attachments;
         swapchain_framebuffer_create_info.width           = app.swapchain_extent.width;
@@ -79,285 +155,198 @@ static void create_render_passes(Vulkan::App& app, RenderPasses& render_passes) 
         VK_CHECK(vkCreateFramebuffer(app.device, &swapchain_framebuffer_create_info, nullptr,
                                      &new_framebuffer));
 
-        render_passes.swapchain_framebuffers.push_back(new_framebuffer);
-    }
-}
-
-static void destroy_render_passes(Vulkan::App& app, RenderPasses& render_passes) {
-    vkDestroyRenderPass(app.device, render_passes.final_pass, nullptr);
-    for (auto& framebuffer : render_passes.swapchain_framebuffers) {
-        vkDestroyFramebuffer(app.device, framebuffer, nullptr);
-    }
-}
-
-/////////////////////////////////////////////////////////////////////////////////////////////////
-// Material Resources /////////////////////////////////////////////////////////////////////////// 
-/////////////////////////////////////////////////////////////////////////////////////////////////
-
-// Material resources include any vulkan objects required to make a material.
-// The intention here is to allow the user to string together configurations on the fly and we will reuse
-// vulkan objects as necessary.
-
-struct MaterialTable {
-};
-
-void create_material_table(Vulkan::App& app, MaterialTable& material_table) {
-}
-
-void destroy_material_table(Vulkan::App& app, MaterialTable& material_table) {
-}
-
-struct ShaderModuleInfo {
-    const char* name;
-    uint32_t* spirv_data;
-    size_t size;
-};
-
-// We can do these find_* functions even with create info structs which contain non-dispatchable handles because
-// in all likelihood if two handles have the same value, the implementation believes them to be equivalent. So
-// they aren't really collisions, in this case.
-
-VkPipelineLayout find_pipeline_layout(MaterialTable& material_table, const VkPipelineLayoutCreateInfo& create_info) {
-    return VK_NULL_HANDLE;
-}
-
-VkPipeline find_pipeline(MaterialTable& material_table, const VkGraphicsPipelineCreateInfo& create_info) {
-    return VK_NULL_HANDLE;
-}
-
-VkDescriptorSetLayout find_descriptor_set_layout(MaterialTable& material_table, const VkDescriptorSetLayoutCreateInfo& create_info) {
-    return VK_NULL_HANDLE;
-}
-
-VkPipeline create_pipeline(MaterialTable& material_table, ShaderModuleInfo* modules, size_t num_modules) {
-    for (size_t i = 0; i < num_modules; i++) {
-        const ShaderModuleInfo& module = modules[i];
-        // Check if any descriptor layouts can be reused
+        swapchain_framebuffers.push_back(new_framebuffer);
     }
 
-    // Check if any pipeline layouts can be reused
-    //      If so, check if any pipelines can be reused.
-    //      If not, create pipeline layout and pipeline
+    // Create pipeline
+    // This is some temp code pretty much ripped from the vulkan tutorial. This
+    // will be filled from material config. We will know from this which pass
+    // and subpass to use for a given pipeline.
 
-    return VK_NULL_HANDLE;
-}
-
-/////////////////////////////////////////////////////////////////////////////////////////////////
-// Execution //////////////////////////////////////////////////////////////////////////////////// 
-/////////////////////////////////////////////////////////////////////////////////////////////////
-
-static void execute_draw_commands(size_t swapchain_index, RenderPasses& render_passes) {
-
-}
-
-static void render_frame(Vulkan::App& app, RenderPasses& render_passes) {
-    // Advance to a new frame
-    size_t last_frame    = app.current_frame;
-    size_t current_frame = app.current_frame = (app.current_frame + 1) % app.max_rendering_frames;
-
-    LOG_DEBUG("Rendering frame %u", app.current_frame);
-
-    // Get frame resources
-    Vulkan::FrameResources& frame_resources = app.frame_resources[current_frame];
-
-    // Wait for the last queue that used these frame resources to finish rendering. This is mainly
-    // to signal it's safe to reuse the command buffer
-    vkWaitForFences(app.device, 1, &frame_resources.draw_complete_fence, VK_TRUE, UINT64_MAX);
-    vkResetFences(app.device, 1, &frame_resources.draw_complete_fence);
-
-    LOG_DEBUG("Acquiring swapchain image");
-
-    // Acquire a swapchain image
-    uint32_t image_index;
-    vkAcquireNextImageKHR(app.device, app.swapchain, UINT64_MAX, frame_resources.acquire_semaphore,
-                          VK_NULL_HANDLE, &image_index);
-
-    // Record/supply command buffers
+    VkPipeline pipeline;
     {
-        vkResetCommandBuffer(frame_resources.command_buffer, 0);
-        VkCommandBufferBeginInfo begin_info = {};
-        begin_info.sType                    = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        vkBeginCommandBuffer(frame_resources.command_buffer, &begin_info);
+        // Specify vertex layout. This will be provided by a config as well.
+        // Application is responsible for making sure layouts match with
+        // input buffers
 
-        // Draw commands
-        execute_draw_commands(image_index, render_passes);
+        // Shader stages
+        std::vector< VkPipelineShaderStageCreateInfo > shader_stages;
+        for (const auto& module_data : shader_module_data) {
+            VkPipelineShaderStageCreateInfo create_info = {};
+            create_info.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+            create_info.pName  = module_data.entry_point.c_str();
+            create_info.module = module_data.module;
+            create_info.stage  = module_data.stage;
 
-        vkEndCommandBuffer(frame_resources.command_buffer);
-    }
-
-    // Submit to queue
-    {
-        VkSubmitInfo submit_info = {};
-        submit_info.sType        = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-
-        // Add wait semaphores. At the very least, do not output color until the image has been
-        // acquired.
-        std::array< VkSemaphore, 1 > wait_semaphores = { frame_resources.acquire_semaphore };
-        std::array< VkPipelineStageFlags, 1 > wait_stages
-            = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-        submit_info.waitSemaphoreCount = wait_semaphores.size();
-        submit_info.pWaitSemaphores    = wait_semaphores.data();
-        submit_info.pWaitDstStageMask  = wait_stages.data();
-
-        // Add signal semaphores
-        std::array< VkSemaphore, 1 > signal_semaphores
-            = { frame_resources.draw_complete_semaphore };
-        submit_info.signalSemaphoreCount = signal_semaphores.size();
-        submit_info.pSignalSemaphores    = signal_semaphores.data();
-
-        // Add command buffers
-        submit_info.commandBufferCount = 1;
-        submit_info.pCommandBuffers    = &frame_resources.command_buffer;
-
-        VK_CHECK(vkQueueSubmit(app.graphics_queue, 1, &submit_info,
-                               frame_resources.draw_complete_fence));
-    }
-
-    // Present swapchain image
-    {
-        VkPresentInfoKHR present_info   = {};
-        present_info.sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-        present_info.waitSemaphoreCount = 1;
-        present_info.pWaitSemaphores    = &frame_resources.draw_complete_semaphore;
-        present_info.swapchainCount     = 1;
-        present_info.pSwapchains        = &app.swapchain;
-        present_info.pImageIndices      = &image_index;
-
-        VK_CHECK(vkQueuePresentKHR(app.present_queue, &present_info));
-    }
-}
-
-/////////////////////////////////////////////////////////////////////////////////////////////////
-// Files //////////////////////////////////////////////////////////////////////////////////////// 
-/////////////////////////////////////////////////////////////////////////////////////////////////
-
-struct FileResult {
-    const char* filename;
-    uint8_t* data;
-    size_t size;
-};
-
-void load_temp_file(const char* filename, std::function<void(const FileResult&)> on_file_load) {
-    int result = PHYSFS_exists(filename);
-    if (!result) {
-        RUNTIME_ERROR("Error loading %s", filename);
-    }
-
-    PHYSFS_file* file = PHYSFS_openRead(filename);
-    PHYSFS_sint64 file_size = PHYSFS_fileLength(file);
-
-    uint8_t* buffer = new uint8_t[file_size];
-    PHYSFS_read(file, buffer, 1, file_size);
-    PHYSFS_close(file); 
-
-    on_file_load({
-        filename,
-        buffer, 
-        (size_t) file_size
-    });
-    delete[] buffer;
-}
-
-void load_temp_files(const char** filenames, size_t num_files, std::function<void(const FileResult*, size_t)> on_files_load) {
-    std::vector<FileResult> results;
-    for (size_t i = 0; i < num_files; i++) {
-        const char* filename = filenames[i];
-        int result = PHYSFS_exists(filename);
-        if (!result) {
-            RUNTIME_ERROR("Error loading %s", filename);
+            shader_stages.push_back(create_info);
         }
 
-        PHYSFS_file* file = PHYSFS_openRead(filename);
-        PHYSFS_sint64 file_size = PHYSFS_fileLength(file);
+        // Vertex info
+        // TODO: pull vertex info from vertex shader reflection data
+        VkPipelineVertexInputStateCreateInfo vertex_input_info = {};
+        vertex_input_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+        vertex_input_info.vertexBindingDescriptionCount = 0;
+        vertex_input_info.pVertexBindingDescriptions = nullptr;
+        vertex_input_info.vertexAttributeDescriptionCount = 0;
+        vertex_input_info.pVertexAttributeDescriptions = nullptr;
 
-        uint8_t* buffer = new uint8_t[file_size];
-        PHYSFS_read(file, buffer, 1, file_size);
-        PHYSFS_close(file); 
+        // Input assembly
+        VkPipelineInputAssemblyStateCreateInfo input_assembly = {};
+        input_assembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+        input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+        input_assembly.primitiveRestartEnable = VK_FALSE;
 
-        results.push_back({
-            filename,
-            buffer,
-            (size_t) file_size
-        });
+        // Viewport and scissor
+        VkViewport viewport = {};
+        viewport.x = 0;
+        viewport.y = 0;
+        viewport.width = app.swapchain_extent.width;
+        viewport.height = app.swapchain_extent.height;
+        viewport.minDepth = 0;
+        viewport.maxDepth = 1;
+
+        VkRect2D scissor = {};
+        scissor.offset = {0, 0};
+        scissor.extent = app.swapchain_extent;
+
+        VkPipelineViewportStateCreateInfo viewport_state_info = {};
+        viewport_state_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+        viewport_state_info.pViewports = &viewport;
+        viewport_state_info.viewportCount = 1;
+        viewport_state_info.pScissors = &scissor;
+        viewport_state_info.scissorCount = 1;
+
+        // Multisampling info
+        VkPipelineMultisampleStateCreateInfo multisampling = {};
+        multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+        multisampling.sampleShadingEnable = VK_FALSE;
+        multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+        multisampling.minSampleShading = 1.0f;
+        multisampling.pSampleMask = nullptr;
+        multisampling.alphaToCoverageEnable = VK_FALSE;
+        multisampling.alphaToOneEnable = VK_FALSE;
+
+        // Rasterizer
+        VkPipelineRasterizationStateCreateInfo rasterizer_info = {};
+        rasterizer_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+        rasterizer_info.depthClampEnable = VK_FALSE;
+        rasterizer_info.rasterizerDiscardEnable = VK_FALSE;
+        rasterizer_info.polygonMode = VK_POLYGON_MODE_FILL;
+        rasterizer_info.lineWidth = 1;
+        rasterizer_info.cullMode = VK_CULL_MODE_BACK_BIT;
+        rasterizer_info.frontFace = VK_FRONT_FACE_CLOCKWISE;
+        rasterizer_info.depthBiasClamp = VK_FALSE;
+        rasterizer_info.depthBiasConstantFactor = 0.0f;
+        rasterizer_info.depthBiasClamp = 0.0f;
+        rasterizer_info.depthBiasSlopeFactor = 0.0f;
+
+        // Depth and stencil buffer
+        // TODO: Implement me!
+
+        // Color blending
+        // Default blending
+        // TODO: This should come from pass configuration. The blend attachments correspond
+        // with the pass attachments
+        VkPipelineColorBlendAttachmentState color_blend_attachment = {};
+        color_blend_attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+        color_blend_attachment.blendEnable = VK_FALSE;
+        color_blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+        color_blend_attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+        color_blend_attachment.colorBlendOp = VK_BLEND_OP_ADD;
+        color_blend_attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+        color_blend_attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+        color_blend_attachment.alphaBlendOp = VK_BLEND_OP_ADD;
+
+        VkPipelineColorBlendStateCreateInfo color_blending = {};
+        color_blending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+        color_blending.logicOpEnable = VK_FALSE;
+        color_blending.logicOp = VK_LOGIC_OP_COPY;
+        color_blending.attachmentCount = 1;
+        color_blending.pAttachments = &color_blend_attachment;
+        color_blending.blendConstants[0] = 0.0f;
+        color_blending.blendConstants[1] = 0.0f;
+        color_blending.blendConstants[2] = 0.0f;
+        color_blending.blendConstants[3] = 0.0f;
+
+        VkDynamicState dynamic_states[] = {
+            VK_DYNAMIC_STATE_VIEWPORT
+        };
+
+        VkPipelineDynamicStateCreateInfo dynamic_state = {};
+        dynamic_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+        dynamic_state.dynamicStateCount = 1;
+        dynamic_state.pDynamicStates = dynamic_states;
+
+        // Pipeline
+        VkGraphicsPipelineCreateInfo pipeline_create_info = {};
+        pipeline_create_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+        pipeline_create_info.pStages = shader_stages.data();
+        pipeline_create_info.stageCount = shader_stages.size();
+        pipeline_create_info.pVertexInputState = &vertex_input_info;
+        pipeline_create_info.pInputAssemblyState = &input_assembly;
+        pipeline_create_info.pViewportState = &viewport_state_info;
+        pipeline_create_info.pRasterizationState = &rasterizer_info;
+        pipeline_create_info.pMultisampleState = &multisampling;
+        pipeline_create_info.pDepthStencilState = nullptr;
+        pipeline_create_info.pColorBlendState = &color_blending;
+        pipeline_create_info.pDynamicState = &dynamic_state;
+
+        pipeline_create_info.layout = pipeline_layout;
+        pipeline_create_info.renderPass = final_pass;
+
+        pipeline = material_table.request_pipeline(pipeline_create_info);
     }
 
-    on_files_load(results.data(), results.size());
+    // TODO: Clear color is another per-attachment thing. This should be
+    // pulled from pass config
+    VkClearValue clear_color = {0.5f, 0.0f, 0.25f, 1.0f};
+    auto render_func = [&app, &clear_color, &pipeline, &final_pass, &swapchain_framebuffers](const size_t image_index, VkCommandBuffer cmd_buf) {
+        VkRenderPassBeginInfo final_pass_begin = {};
+        final_pass_begin.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        final_pass_begin.renderPass = final_pass;
+        final_pass_begin.framebuffer = swapchain_framebuffers[image_index];
+        final_pass_begin.renderArea.offset = {0, 0};
+        final_pass_begin.renderArea.extent = app.swapchain_extent;
+        final_pass_begin.pClearValues = &clear_color;
+        final_pass_begin.clearValueCount = 1;
 
-    for (const FileResult& result : results) {
-        delete[] result.data;
-    }
-}
+        vkCmdBeginRenderPass(cmd_buf, &final_pass_begin, VK_SUBPASS_CONTENTS_INLINE);
 
-void init_fs() {
-    PHYSFS_init(NULL);
-    if (!PHYSFS_mount("./shaders", "shaders", 1)) {
-        RUNTIME_ERROR("Failed to mount shaders folder");
-    }
-}
+        // Viewport and scissor
+        VkViewport viewport = {};
+        viewport.x = 0;
+        viewport.y = 0;
+        viewport.width = app.swapchain_extent.width;
+        viewport.height = app.swapchain_extent.height;
+        viewport.minDepth = 0;
+        viewport.maxDepth = 1;
 
-void deinit_fs() {
-    PHYSFS_deinit();
-}
+        vkCmdSetViewport(cmd_buf, 0, 1, &viewport);
+        vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+        vkCmdDraw(cmd_buf, 3, 1, 0, 0);
 
-/////////////////////////////////////////////////////////////////////////////////////////////////
-// App main ///////////////////////////////////////////////////////////////////////////////////// 
-/////////////////////////////////////////////////////////////////////////////////////////////////
+        vkCmdEndRenderPass(cmd_buf);
+    };
 
-int main() {
-    // TODO: Memory arenas
-    // Load external resources
-    init_fs();
-
-    // Configure vulkan app
-    Vulkan::DeviceConfig device_config;
-    device_config.validation_layers = std::vector< const char* >({ "VK_LAYER_KHRONOS_validation" });
-    device_config.instance_extensions = std::vector< const char* >({ "VK_EXT_debug_utils" });
-    device_config.device_extensions
-        = std::vector< const char* >({ VK_KHR_SWAPCHAIN_EXTENSION_NAME });
-
-    Vulkan::App& app = Vulkan::App::initialize(800, 600, "App", device_config);
-
-    // Create vulkan resources
-    MaterialTable material_table;
-    create_material_table(app, material_table);
-
-    // TEMP CODE
-    // This is what it would look like to create one pipeline from shader stages (and also additional settings)
-    // Can probably load this from a json eventually, make it data driven
-    VkPipeline pipeline;
-    const char* shader_files[] = {"shaders/test.vert.spv", "shaders/test.frag.spv"};
-    load_temp_files(shader_files, ARRAY_LENGTH(shader_files), [shader_files, &pipeline, &material_table](const FileResult* results, size_t num_results) {
-        ShaderModuleInfo test_shader_module[2];
-        test_shader_module[0].name = shader_files[0];
-        test_shader_module[0].spirv_data = (uint32_t*) results[0].data;
-        test_shader_module[0].size = results[0].size / sizeof(uint32_t);
-
-        test_shader_module[1].name = shader_files[1];
-        test_shader_module[1].spirv_data = (uint32_t*) results[1].data;
-        test_shader_module[1].size = results[1].size / sizeof(uint32_t);
-
-        pipeline = create_pipeline(material_table, test_shader_module, 2);
-    });
-
-    RenderPasses render_passes;
-    create_render_passes(app, render_passes);
+    // End temp code
 
     // Render loop
     while (!glfwWindowShouldClose(app.window)) {
         glfwPollEvents();
-        render_frame(app, render_passes);
+        Vulkan::render_frame(app, render_func);
     }
 
     // Clean up resources
-    destroy_render_passes(app, render_passes);
 
-    destroy_material_table(app, material_table);
-
-    // Deinit vulkan app
-    Vulkan::App::deinit();
+    vkDestroyPipeline(app.device, pipeline, nullptr);
+    
+    vkDestroyRenderPass(app.device, final_pass, nullptr);
+    for (auto& framebuffer : swapchain_framebuffers) {
+        vkDestroyFramebuffer(app.device, framebuffer, nullptr);
+    }
 
     // Deinit fs
-    deinit_fs();
+    FileSystem::deinit();
 
     return 0;
 }

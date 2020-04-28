@@ -5,11 +5,110 @@
             "mode" : "frag"
         }
     ],
+    "types" : {
+        "_21" : {
+            "name" : "MVP",
+            "members" : [
+                {
+                    "name" : "model",
+                    "type" : "mat4",
+                    "offset" : 0,
+                    "matrix_stride" : 16
+                },
+                {
+                    "name" : "view",
+                    "type" : "mat4",
+                    "offset" : 64,
+                    "matrix_stride" : 16
+                },
+                {
+                    "name" : "proj",
+                    "type" : "mat4",
+                    "offset" : 128,
+                    "matrix_stride" : 16
+                }
+            ]
+        },
+        "_22" : {
+            "name" : "UniformBufferObject",
+            "members" : [
+                {
+                    "name" : "mvp",
+                    "type" : "_21",
+                    "offset" : 0
+                }
+            ]
+        },
+        "_25" : {
+            "name" : "UniformBufferObject2",
+            "members" : [
+                {
+                    "name" : "mvp",
+                    "type" : "_21",
+                    "offset" : 0
+                }
+            ]
+        },
+        "_28" : {
+            "name" : "PushConstant",
+            "members" : [
+                {
+                    "name" : "push_mat4",
+                    "type" : "mat4",
+                    "offset" : 0,
+                    "matrix_stride" : 16
+                }
+            ]
+        }
+    },
+    "inputs" : [
+        {
+            "type" : "vec2",
+            "name" : "fragTexCoord",
+            "location" : 1
+        },
+        {
+            "type" : "vec3",
+            "name" : "fragColor",
+            "location" : 0
+        }
+    ],
     "outputs" : [
         {
             "type" : "vec4",
             "name" : "outColor",
             "location" : 0
+        }
+    ],
+    "textures" : [
+        {
+            "type" : "sampler2D",
+            "name" : "texSampler",
+            "set" : 0,
+            "binding" : 1
+        }
+    ],
+    "ubos" : [
+        {
+            "type" : "_22",
+            "name" : "UniformBufferObject",
+            "block_size" : 192,
+            "set" : 0,
+            "binding" : 0
+        },
+        {
+            "type" : "_25",
+            "name" : "UniformBufferObject2",
+            "block_size" : 192,
+            "set" : 5,
+            "binding" : 0
+        }
+    ],
+    "push_constants" : [
+        {
+            "type" : "_28",
+            "name" : "_30",
+            "push_constant" : true
         }
     ]
 }

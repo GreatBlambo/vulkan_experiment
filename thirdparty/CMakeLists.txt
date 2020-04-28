@@ -8,3 +8,7 @@ add_subdirectory(glfw)
 
 add_subdirectory(physfs)
 set(PHYSFS_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/physfs/src" PARENT_SCOPE)
+
+set(RAPIDJSON_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/rapidjson/include" PARENT_SCOPE)
+
+add_subdirectory(glm)
