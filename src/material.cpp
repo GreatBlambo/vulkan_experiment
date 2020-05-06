@@ -310,7 +310,7 @@ static void load_reflection_data(const Memory::Buffer& reflection_json,
     */
 }
 
-void MaterialTable::deserialize_module_data(const std::vector< SPIRVModuleFileData >& modules,
+void MaterialSystem::deserialize_module_data(const std::vector< SPIRVModuleFileData >& modules,
                              std::vector< ShaderModuleData >& out_module_data) {
     out_module_data.resize(modules.size());
     for (size_t i = 0; i < modules.size(); i++) {
@@ -327,7 +327,7 @@ void MaterialTable::deserialize_module_data(const std::vector< SPIRVModuleFileDa
     }
 }
 
-static BufferLayout* get_default_resource_layout() {
+static BufferLayout* get_default_mesh_layout() {
     static BufferLayout::Attribute per_vertex_attributes[] = {
         {
             "position",
@@ -372,7 +372,7 @@ static BufferLayout* get_default_resource_layout() {
     return &layout;
 }
 
-MaterialTable::MaterialTable(Vulkan::App& app) 
+MaterialSystem::MaterialSystem(Vulkan::App& app) 
     : app(app) {
     VkPipelineCacheCreateInfo pipeline_cache_create_info = {};
     pipeline_cache_create_info.sType           = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
@@ -381,7 +381,7 @@ MaterialTable::MaterialTable(Vulkan::App& app)
                                    &this->pipeline_cache));
 }
 
-MaterialTable::~MaterialTable() {
+MaterialSystem::~MaterialSystem() {
     for (const auto& shader_module : shader_modules) {
         delete[] shader_module.first.pCode;
         vkDestroyShaderModule(app.device, shader_module.second, nullptr);
@@ -412,7 +412,7 @@ MaterialTable::~MaterialTable() {
 // handles because in all likelihood if two handles have the same value, the implementation believes
 // them to be equivalent. So they aren't really collisions, in this case.
 
-VkShaderModule MaterialTable::find_shader_module(const VkShaderModuleCreateInfo& create_info) {
+VkShaderModule MaterialSystem::find_shader_module(const VkShaderModuleCreateInfo& create_info) {
     // Find module
     VkShaderModule result = VK_NULL_HANDLE;
     for (const auto& shader_module : shader_modules) {
@@ -446,7 +446,7 @@ bool operator!=(const VkDescriptorSetLayoutBinding& l, const VkDescriptorSetLayo
 }
 
 VkDescriptorSetLayout
-MaterialTable::find_descriptor_set_layout(const VkDescriptorSetLayoutCreateInfo& create_info) {
+MaterialSystem::find_descriptor_set_layout(const VkDescriptorSetLayoutCreateInfo& create_info) {
     // This function assumes that descriptor set layout bindings are sorted by
     // binding #
     // Find descriptor set layout
@@ -476,7 +476,7 @@ MaterialTable::find_descriptor_set_layout(const VkDescriptorSetLayoutCreateInfo&
     return result;
 }
 
-VkPipelineLayout MaterialTable::find_pipeline_layout(
+VkPipelineLayout MaterialSystem::find_pipeline_layout(
                                       const VkPipelineLayoutCreateInfo& create_info) {
     VkPipelineLayout result = VK_NULL_HANDLE;
     for (const auto& pipeline_layout : pipeline_layouts) {
@@ -538,7 +538,7 @@ VkPipelineLayout MaterialTable::find_pipeline_layout(
     return result;
 }
 
-VkShaderModule MaterialTable::request_shader_module(const VkShaderModuleCreateInfo& create_info) {
+VkShaderModule MaterialSystem::request_shader_module(const VkShaderModuleCreateInfo& create_info) {
     VkShaderModule result = find_shader_module(create_info);
     if (result) {
         return result;
@@ -559,7 +559,7 @@ VkShaderModule MaterialTable::request_shader_module(const VkShaderModuleCreateIn
 }
 
 VkDescriptorSetLayout
-MaterialTable::request_descriptor_set_layout(const VkDescriptorSetLayoutCreateInfo& create_info) {
+MaterialSystem::request_descriptor_set_layout(const VkDescriptorSetLayoutCreateInfo& create_info) {
     VkDescriptorSetLayout result = find_descriptor_set_layout(create_info);
     if (result) {
         return result;
@@ -581,7 +581,7 @@ MaterialTable::request_descriptor_set_layout(const VkDescriptorSetLayoutCreateIn
     return result;
 }
 
-VkPipelineLayout MaterialTable::request_pipeline_layout(const VkPipelineLayoutCreateInfo& create_info) {
+VkPipelineLayout MaterialSystem::request_pipeline_layout(const VkPipelineLayoutCreateInfo& create_info) {
     VkPipelineLayout result = find_pipeline_layout(create_info);
     if (result) {
         return result;
@@ -609,7 +609,7 @@ VkPipelineLayout MaterialTable::request_pipeline_layout(const VkPipelineLayoutCr
     return result;
 }
 
-VkPipeline MaterialTable::request_pipeline(const VkGraphicsPipelineCreateInfo& create_info) {
+VkPipeline MaterialSystem::request_pipeline(const VkGraphicsPipelineCreateInfo& create_info) {
     VkPipeline pipeline;
     VK_CHECK(vkCreateGraphicsPipelines(this->app.device, this->pipeline_cache, 1,
                                        &create_info, nullptr, &pipeline));
@@ -617,7 +617,7 @@ VkPipeline MaterialTable::request_pipeline(const VkGraphicsPipelineCreateInfo& c
 }
 
 VkPipelineLayout
-MaterialTable::create_pipeline_layout_from_modules(std::vector< ShaderModuleData >& shader_module_data) {
+MaterialSystem::create_pipeline_layout_from_modules(std::vector< ShaderModuleData >& shader_module_data) {
     VkShaderStageFlags stages_seen = 0;
 
     // Create pipeline layout

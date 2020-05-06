@@ -9,7 +9,7 @@
 
 namespace Vulkan {
 
-void render_frame(Vulkan::App& app, std::function< void(const size_t, VkCommandBuffer) > render) {
+void render_frame(Vulkan::App& app, const std::function< void(const size_t, VkCommandBuffer) >& render) {
     // Advance to a new frame
     size_t last_frame    = app.current_frame;
     size_t current_frame = app.current_frame = (app.current_frame + 1) % app.max_rendering_frames;

@@ -9,27 +9,12 @@
 
 namespace Vulkan {
 
-struct ResourceDescription {
-    struct Component {
-        VkFormat format;
-        size_t offset;
-    };
-
-    struct Binding {
-        size_t binding_number;
-        Component* components;
-        size_t num_components;
-    };
-
-    Binding* bindings;
-    size_t num_bindings;
-};
-
 struct ShaderModuleData {
     VkShaderStageFlagBits stage;
     VkShaderModule module;
 
     struct InputAttribute {
+        const char* name;
         size_t location;
         VkFormat format;
     };
@@ -67,7 +52,7 @@ struct BufferLayout {
     size_t num_bindings = 0;
 };
 
-class MaterialTable {
+class MaterialSystem {
   private:
     Vulkan::App& app;
     VkPipelineCache pipeline_cache;
@@ -77,27 +62,80 @@ class MaterialTable {
         descriptor_set_layouts;
     std::vector< std::pair< VkPipelineLayoutCreateInfo, VkPipelineLayout > > pipeline_layouts;
 
+
+  public:
+    struct ShaderModule {
+        size_t index;
+    };
+
+    struct Material {
+        size_t index;
+    };
+
+    struct ShaderResourceInfo {
+        struct InputAttribute {
+            const char* name;
+            size_t location;
+            VkFormat format;
+        };
+        Memory::Array<InputAttribute> inputs;
+
+        struct DescriptorSetBinding {
+            size_t set_number;
+            VkDescriptorSetLayoutBinding binding;
+        };
+        Memory::Array<DescriptorSetBinding> set_bindings;
+    };
+
+    struct ShaderModuleInfo {
+        const char* entry_point;
+        VkShaderModule module;
+        VkShaderStageFlags stage;
+        ShaderResourceInfo resource_info;
+    };
+
+    struct MaterialInfo {
+        struct Passes {
+            Memory::Array<ShaderModule> shader_modules;
+        };
+
+        Memory::Array<Passes> passes;
+
+        struct DescriptorSetLayout {
+            size_t set_number;
+            VkDescriptorSetLayout descriptor_set_layout;
+        };
+        Memory::Array<DescriptorSetLayout> descriptor_set_layouts;
+
+        VkPipelineLayout pipeline_layout;
+    };
+
+    MaterialSystem(Vulkan::App& app);
+    ~MaterialSystem();
+
+    void deserialize_module_data(const std::vector< SPIRVModuleFileData >& modules,
+                                 std::vector< ShaderModuleData >& out_module_data);
+
+    ShaderModule create_shader_module(const char* name, const Memory::Buffer& spirv_source, const Memory::Buffer& reflection_json);
+    ShaderModule create_shader_module(const char* name, const Memory::Buffer& spirv_source, VkShaderStageFlags stage, const ShaderResourceInfo& resources);
+    const ShaderModuleInfo* get_shader_module_info(const ShaderModule& module);
+
+    Material create_material(const char* name, const MaterialInfo& material_info);
+    const MaterialInfo* get_material_info(const Material& material);
+
+    // Request vulkan resources from cache. These functions will create
+    // the resource if an identical one does not yet exist
+    VkPipeline request_pipeline(const VkGraphicsPipelineCreateInfo& create_info);
     VkDescriptorSetLayout
     request_descriptor_set_layout(const VkDescriptorSetLayoutCreateInfo& create_info);
     VkPipelineLayout request_pipeline_layout(const VkPipelineLayoutCreateInfo& create_info);
     VkShaderModule request_shader_module(const VkShaderModuleCreateInfo& create_info);
 
+    // Find vulkan resources from cache
     VkPipelineLayout find_pipeline_layout(const VkPipelineLayoutCreateInfo& create_info);
     VkDescriptorSetLayout
     find_descriptor_set_layout(const VkDescriptorSetLayoutCreateInfo& create_info);
     VkShaderModule find_shader_module(const VkShaderModuleCreateInfo& create_info);
-
-  public:
-    MaterialTable(Vulkan::App& app);
-    ~MaterialTable();
-
-    void deserialize_module_data(const std::vector< SPIRVModuleFileData >& modules,
-                                 std::vector< ShaderModuleData >& out_module_data);
-
-    VkPipelineLayout
-    create_pipeline_layout_from_modules(std::vector< ShaderModuleData >& shader_module_data);
-
-    VkPipeline request_pipeline(const VkGraphicsPipelineCreateInfo& create_info);
 };
 
 }    // namespace Vulkan

@@ -17,7 +17,8 @@
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 int main() {
-    Memory::Arena main_arena(GB(8));
+    Memory::VirtualHeap app_heap(GB(8));
+    Memory::VirtualHeap per_frame_heap(GB(8));
 
     // Load external resources
     FileSystem::initialize("./");
@@ -32,7 +33,7 @@ int main() {
     Vulkan::App app(1920, 1080, "App", device_config);
 
     // Create vulkan resources
-    Vulkan::MaterialTable material_table(app);
+    Vulkan::MaterialSystem material_table(app);
 
     // TEMP CODE
     VkPipelineLayout pipeline_layout;

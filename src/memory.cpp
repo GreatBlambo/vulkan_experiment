@@ -6,66 +6,15 @@
 #include <algorithm>
 
 namespace Memory {
-Arena::Arena(size_t size, Arena* backing_arena)
-    : backing_arena(backing_arena) {
-}
 
-Arena::Arena(size_t virtual_mem_reserve)
-    : backing_arena(nullptr) {
-    virtual_mem_root = Platform::virtual_reserve(virtual_mem_reserve, virtual_pages_reserved);
-}
+void* Arena::push(size_t size, size_t align) {
+    // Attempt to push onto the top of a arena. Return null if too full
 
-Arena::~Arena() {
-    if (virtual_mem_root) {
-        Platform::virtual_release(virtual_mem_root);
-    }
-}
-
-Arena::Block* Arena::append_block(Arena::Block* parent, size_t size) {
-    // Request a new block from backing arena or virtual memory and append
-    // it to an existing block
-
-    Block* new_block = nullptr;
-    size_t buffer_size = 0;
-    if (backing_arena) {
-        // A backing arena exists. Push a new block onto it
-        buffer_size = size;
-        new_block = (Block*) backing_arena->push<uint8_t>(sizeof(Block) + buffer_size);
-    } else {
-        // A backing arena does not exist. Push a new block onto virtual
-        // memory
-        ASSERT(Platform::get_num_pages(size) <= virtual_pages_reserved - virtual_pages_committed);
-
-        size_t pages_committed = 0;
-        void* top = (void*) ((uint8_t*) virtual_mem_root + (virtual_pages_committed * Platform::get_page_size()));
-        new_block = (Block*) Platform::virtual_commit(top, size, pages_committed);
-
-        buffer_size = pages_committed * Platform::get_page_size();
-
-        virtual_pages_committed += pages_committed;
-    }
-
-    // Fill in the buffer info for the new block
-    // The start of the buffer is right after the block metadata we allocated
-    new_block->buffer.data = (uint8_t*) (new_block + 1);
-    new_block->buffer.size = buffer_size;
-
-    // Append this new block to the parent block if it exists
-    if (parent) {
-        parent->next = new_block;
-    }
-    
-    return new_block;
-}
-
-void* Arena::push_onto_block(Arena::Block* block, size_t size, size_t align) {
-    // Attempt to push onto the top of a block. Return null if too full
-
-    // Get the top of the block.
-    void* top = (void*) (block->buffer.data + block->used);
+    // Get the top of the arena.
+    void* top = this->top();
 
     // Get the total bytes unused with the new allocation
-    size_t unused = block->buffer.size - (block->used);
+    size_t unused = buffer.size - (used);
 
     // Align the top pointer and see if it still fits
     void* aligned_top = std::align(align, size, top, unused);
@@ -75,68 +24,163 @@ void* Arena::push_onto_block(Arena::Block* block, size_t size, size_t align) {
         return nullptr;
     }
 
-    // If it fits, update the total used bytes in the block and return the
+    // If it fits, update the total used bytes in the arena and return the
     // result
-    block->used = (block->buffer.size - unused) + size;
+    used = (buffer.size - unused) + size;
     return aligned_top;
 }
 
-void* Arena::push(size_t size, size_t align) {
+void Arena::reset() {
+    used = 0;
+}
+
+void Arena::reset(void* ptr) {
+    ASSERT(this->inside(ptr));
+
+    used = (uint8_t*) ptr - buffer.data;
+}
+
+void* Arena::top() {
+    return (void*) (buffer.data + used);
+}
+
+bool Arena::inside(void* ptr) {
+    return (uint8_t*) ptr >= buffer.data && (uint8_t*) ptr <= (uint8_t*) this->top();
+}
+
+VirtualHeap::VirtualHeap(size_t reserve_size) {
+    arena.buffer.data = (uint8_t*) Platform::virtual_reserve(reserve_size, num_pages_reserved);
+}
+
+VirtualHeap::~VirtualHeap() {
+    Platform::virtual_release(arena.buffer.data);
+}
+
+void* VirtualHeap::allocate_data(size_t size, size_t align) {
+    // Attempt to push onto the existing arena
+    void* result = arena.push(size, align);
+    if (result) {
+        // Size fits on existing arena
+        return result;
+    }
+
+    // Size doesn't fit on current arena. Expand the arena by committing
+    // more memory
+    //
+    // Do not apply growth factor if it's the first commit
+    size_t size_needed = num_pages_committed == 0 ? size : std::max(arena.buffer.size, size + align) * GROWTH_FACTOR;
+
+    // If growth size required > amount reserved, panic
+    ASSERT_MSG(num_pages_reserved >= Platform::get_num_pages(size_needed),
+               "Cannot commit (%llu) pages more than reserved (%llu) pages",
+               Platform::get_num_pages(size_needed), num_pages_reserved);
+
+    // Commit additional memory in reserved region
+    size_t pages_committed;
+    Platform::virtual_commit(arena.buffer.data + num_pages_committed * Platform::get_page_size(), size_needed, pages_committed);
+
+    // Add to pages committed
+    num_pages_committed += pages_committed;
+
+    // Increase the size of the arena to the total number of pages
+    // committed
+    arena.buffer.size = num_pages_committed * Platform::get_page_size();
+
+    // Push onto the new arena
+    result = arena.push(size, align);
+    return result;
+}
+
+void VirtualHeap::reset() {
+    arena.reset();
+}
+
+LinearAllocator::LinearAllocator(size_t size, IAllocator& backing_allocator)
+    : backing_allocator(backing_allocator) {
+}
+
+LinearAllocator::~LinearAllocator() {
+}
+
+Arena* LinearAllocator::append_arena(Arena* parent, size_t size) {
+    // Request a new arena from backing arena or virtual memory and append
+    // it to an existing arena
+
+    Arena* new_arena = nullptr;
+    size_t buffer_size = 0;
+    // Push a new arena onto backing arena
+    buffer_size = size;
+    new_arena = (Arena*) backing_allocator.allocate<uint8_t>(sizeof(Arena) + buffer_size);
+
+    // Fill in the buffer info for the new arena
+    // The start of the buffer is right after the arena metadata we allocated
+    new_arena->buffer.data = (uint8_t*) (new_arena + 1);
+    new_arena->buffer.size = buffer_size;
+
+    // Append this new arena to the parent arena if it exists
+    if (parent) {
+        parent->next = new_arena;
+    }
+    
+    return new_arena;
+}
+
+void* LinearAllocator::allocate_data(size_t size, size_t align) {
     // If the alignment is not a power of 2, set it to 16
     if (!Utils::is_power_of_2(align)) {
         align = 16;
     }
 
-    //Check if root block exists
-    if (!root_block) {
-        // No root block exists, append a new one
+    //Check if root arena exists
+    if (!root_arena) {
+        // No root arena exists, append a new one
 
-        root_block = append_block(nullptr, size);
+        root_arena = append_arena(nullptr, size);
     }
 
-    // Iterate through current blocks, starting at the root block. 
+    // Iterate through current arenas, starting at the root arena. 
     // If any has enough space, allocate and return the pointer. 
-    // If not, create a new block at the end of the chain.
+    // If not, create a new arena at the end of the chain.
     //
     // TODO: Look into ways to speed this up, EG maintain a bitfield
-    // and a fixed list of offsets to skip to a block which best fits
-    Block* current_block = root_block;
+    // and a fixed list of offsets to skip to an arena which best fits
+    Arena* current_arena = root_arena;
     void* result = nullptr;
-    while (current_block != nullptr) {
-        // Attempt to push onto the current block
-        result = push_onto_block(current_block, size, align);
+    while (current_arena != nullptr) {
+        // Attempt to push onto the current arena
+        result = current_arena->push(size, align);
         if (result) {
-            // Can push onto current block. Return the result.
+            // Can push onto current arena. Return the result.
             break;
         }
 
-        // Can't push onto block, move onto the next
-        // If there's no next, request a block that will fit and return
-        if (!current_block->next) {
-            // None of the current blocks fit. Request a new one from 
+        // Can't push onto arena, move onto the next
+        // If there's no next, request a arena that will fit and return
+        if (!current_arena->next) {
+            // None of the current arenas fit. Request a new one from 
             // backing arena or virtual memory
-            Arena::Block* new_block = append_block(
-                current_block, Arena::GROWTH_FACTOR * std::max(size, current_block->buffer.size));
+            Arena* new_arena = append_arena(
+                current_arena, LinearAllocator::GROWTH_FACTOR * std::max(size, current_arena->buffer.size));
 
-            // Push onto new block
-            result = push_onto_block(new_block, size, align);
+            // Push onto new arena
+            result = new_arena->push(size, align);
 
             break;
         } else {
-            // Else, move on to next block
-            current_block = current_block->next;
+            // Else, move on to next arena
+            current_arena = current_arena->next;
         }
     }
 
     return result;
 }
 
-void Arena::reset() {
-    // Iterate through all the blocks and reset the used memory to 0
-    Arena::Block* current_block = root_block;
-    while (current_block) {
-        current_block->used = 0;
-        current_block = current_block->next;
+void LinearAllocator::reset() {
+    // Iterate through all the arenas and reset the used memory to 0
+    Arena* current_arena = root_arena;
+    while (current_arena) {
+        current_arena->reset();
+        current_arena = current_arena->next;
     }
 }
 
