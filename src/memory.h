@@ -10,26 +10,6 @@ namespace Memory {
 #define GB(num) (size_t)(1024 * MB(num))
 #define TB(num) (size_t)(1024 * GB(num))
 
-template <typename T>
-struct Array {
-    T* items = nullptr;
-    size_t num_items = 0;
-
-    Array(T* items, size_t num_items) 
-        : items(items),
-        , num_items(num_items){
-    }
-
-    inline T& operator[](size_t index) {
-        ASSERT(index < num_items);
-        return items[i];
-    }
-
-    inline size_t size() {
-        return num_items;
-    }
-};
-
 struct Buffer {
     uint8_t* data = nullptr;
     size_t size   = 0;
@@ -40,8 +20,9 @@ struct Arena {
     Buffer buffer;
     size_t used = 0;
     void* push(size_t size, size_t align);
+    void clear();
     void reset();
-    void reset(void* ptr);
+    void rewind(void* ptr);
     void* top();
     bool inside(void* ptr);
 };
@@ -60,6 +41,13 @@ class IAllocator {
     template < typename T >
     T* reallocate(T* ptr, size_t number, size_t align = alignof(T)) {
         return (T*) reallocate_data((void*) ptr, number * sizeof(T), align);
+    }
+
+    inline const char* copy_string(const char* str) {
+        size_t len = strlen(str);
+        const char* buf = allocate<char>(len + 1);
+        memcpy((void*) buf, (void*) str, len);
+        return buf;
     }
 };
 
@@ -82,7 +70,8 @@ class VirtualHeap : public IAllocator {
     inline void free(void* ptr) {
         // No-op
     };
-    void reset();
+    void clear();
+    void release();
 };
 
 class LinearAllocator : public IAllocator {
@@ -107,7 +96,8 @@ class LinearAllocator : public IAllocator {
         // No-op
     };
 
-    void reset();
+    void clear();
+    void release();
 };
 
 }    // namespace Memory

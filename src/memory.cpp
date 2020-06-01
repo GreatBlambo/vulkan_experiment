@@ -30,11 +30,16 @@ void* Arena::push(size_t size, size_t align) {
     return aligned_top;
 }
 
-void Arena::reset() {
+void Arena::clear() {
     used = 0;
 }
 
-void Arena::reset(void* ptr) {
+void Arena::reset() {
+    used = 0;
+    buffer.size = 0;
+}
+
+void Arena::rewind(void* ptr) {
     ASSERT(this->inside(ptr));
 
     used = (uint8_t*) ptr - buffer.data;
@@ -91,8 +96,13 @@ void* VirtualHeap::allocate_data(size_t size, size_t align) {
     return result;
 }
 
-void VirtualHeap::reset() {
+void VirtualHeap::clear() {
+    arena.clear();
+}
+
+void VirtualHeap::release() {
     arena.reset();
+    Platform::virtual_decommit(arena.buffer.data, arena.buffer.size);
 }
 
 LinearAllocator::LinearAllocator(size_t size, IAllocator& backing_allocator)
@@ -100,6 +110,7 @@ LinearAllocator::LinearAllocator(size_t size, IAllocator& backing_allocator)
 }
 
 LinearAllocator::~LinearAllocator() {
+    release();
 }
 
 Arena* LinearAllocator::append_arena(Arena* parent, size_t size) {
@@ -175,13 +186,27 @@ void* LinearAllocator::allocate_data(size_t size, size_t align) {
     return result;
 }
 
-void LinearAllocator::reset() {
+void LinearAllocator::clear() {
     // Iterate through all the arenas and reset the used memory to 0
     Arena* current_arena = root_arena;
     while (current_arena) {
         current_arena->reset();
         current_arena = current_arena->next;
     }
+}
+
+
+void LinearAllocator::release() {
+    // Iterate through all the arenas and free them. Set the root arena
+    // to null
+    Arena* current_arena = root_arena;
+    while (current_arena) {
+        Arena* arena_to_free = current_arena;
+        current_arena = current_arena->next;
+
+        backing_allocator.free(arena_to_free);
+    }
+    root_arena = nullptr;
 }
 
 }    // namespace Memory

@@ -12,17 +12,6 @@ inline bool is_power_of_2(const size_t n) {
     return n != 0 && (n & (n - 1)) == 0;
 }
 
-constexpr unsigned long djb2_hash(const char* str) {{
-    return str[0] == 0 ? 0 : str[0] + (5381 * djb2_hash(str + 1));
-}}
-
-template<typename T>
-inline void hash_combine(std::size_t& seed, const T& v)
-{
-    std::hash<T> hasher;
-    seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-}
-
 #define LOG(logtype, format, ...) \
     do \
     { \
@@ -53,9 +42,9 @@ inline void hash_combine(std::size_t& seed, const T& v)
 #define LOG_WARNING(format, ...)
 #define LOG_INFO(format, ...)
 
-#define ASSERT_MSG(cond, msg, ...) 
-#define ASSERT_WARN(cond, msg, ...)
-#define ASSERT(cond)
+#define ASSERT_MSG(cond, msg, ...) cond
+#define ASSERT_WARN(cond, msg, ...) cond
+#define ASSERT(cond) cond
 #endif
 
 #define IMPLEMENT_ME_DESC(feature_name, ...) RUNTIME_ERROR("Feature not implemented: " feature_name, ##__VA_ARGS__) 

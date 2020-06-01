@@ -29,10 +29,14 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/app)
 file(GLOB CPP_SOURCES "src/*.cpp")
 add_executable(${PROJECT_NAME} ${CPP_SOURCES})
 
-target_include_directories(${PROJECT_NAME} PRIVATE ${Vulkan_INCLUDE_DIRS} ${PHYSFS_INCLUDE_DIR} ${RAPIDJSON_INCLUDE_DIR})
-target_compile_definitions(${PROJECT_NAME} PRIVATE $<$<CONFIG:DEBUG>:APP_DEBUG>)
+target_include_directories(${PROJECT_NAME} PRIVATE ${PHYSFS_INCLUDE_DIR} ${RAPIDJSON_INCLUDE_DIR} ${PHMAP_INCLUDE_DIR})
+target_compile_definitions(${PROJECT_NAME} PRIVATE $<$<CONFIG:DEBUG>:APP_DEBUG> GLFW_INCLUDE_NONE GLFW_INCLUDE_VULKAN)
 
-set(LIBS glfw ${Vulkan_LIBRARIES} physfs-static glm::glm assimp::assimp)
+if (WIN32)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE VK_USE_PLATFORM_WIN32_KHR)
+endif()
+
+set(LIBS glfw Vulkan::Vulkan physfs-static glm::glm assimp::assimp)
 if (${USING_STATIC_RESOURCES})
     list(APPEND LIBS static_resources)
 endif()

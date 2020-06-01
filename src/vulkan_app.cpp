@@ -9,6 +9,12 @@
 #include <array>
 #include <algorithm>
 
+namespace Vulkan {
+
+////////////////////////////////////////////////////////////////////////////////
+// Vulkan App implementation
+////////////////////////////////////////////////////////////////////////////////
+
 static VkResult vkCreateDebugUtilsMessengerEXT(
     VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo,
     const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pCallback) {
@@ -31,8 +37,6 @@ static void vkDestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMes
         func(instance, callback, pAllocator);
     }
 }
-
-namespace Vulkan {
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL
                            debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT      message_severity,
@@ -154,7 +158,7 @@ static VkDebugUtilsMessengerEXT create_debug_messenger(VkInstance               
 
     VkDebugUtilsMessengerEXT messenger;
     VkResult                 status
-        = vkCreateDebugUtilsMessengerEXT(instance, &error_cb_create_info, allocator, &messenger);
+        = Vulkan::vkCreateDebugUtilsMessengerEXT(instance, &error_cb_create_info, allocator, &messenger);
     assert(status != VK_ERROR_EXTENSION_NOT_PRESENT);
 
     return messenger;
@@ -705,7 +709,7 @@ App::~App() {
     vkDestroySwapchainKHR(device, swapchain, NULL);
     vkDestroyDevice(device, NULL);
 #ifdef APP_DEBUG
-    vkDestroyDebugUtilsMessengerEXT(vk_instance, vk_debug_messenger,
+    Vulkan::vkDestroyDebugUtilsMessengerEXT(vk_instance, vk_debug_messenger,
                                     NULL);
 #endif
 
@@ -715,5 +719,7 @@ App::~App() {
     glfwDestroyWindow(window);
     glfwTerminate();
 }
+
+
 
 }    // namespace Vulkan

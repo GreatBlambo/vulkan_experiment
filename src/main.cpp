@@ -3,8 +3,7 @@
 #include "handle.h"
 #include "utils.h"
 #include "file_system.h"
-#include "material.h"
-#include "rendering.h"
+#include "renderer.h"
 #include "memory.h"
 
 #include <vector>
@@ -33,7 +32,7 @@ int main() {
     Vulkan::App app(1920, 1080, "App", device_config);
 
     // Create vulkan resources
-    Vulkan::MaterialSystem material_table(app);
+    Vulkan::Renderer renderer(app, app_heap);
 
     // TEMP CODE
     VkPipelineLayout pipeline_layout;
@@ -41,22 +40,19 @@ int main() {
     const char* shader_files[] = { "shaders/triangle.vert.spv", "shaders/triangle.vert.json",
                                    "shaders/triangle.frag.spv", "shaders/triangle.frag.json" };
 
-    std::vector< Vulkan::ShaderModuleData > shader_module_data;
+    std::vector< Vulkan::ShaderModule > shader_modules;
     FileSystem::load_temp_files(
         shader_files, ARRAY_LENGTH(shader_files),
-        [&shader_module_data, &material_table](const Memory::Buffer* results, size_t num_results) {
+        [&shader_modules, &renderer](const Memory::Buffer* results, size_t num_results) {
             const Memory::Buffer& test_vert_spv_file  = results[0];
             const Memory::Buffer& test_vert_json_file = results[1];
             const Memory::Buffer& test_frag_spv_file  = results[2];
             const Memory::Buffer& test_frag_json_file = results[3];
 
-            std::vector< Vulkan::SPIRVModuleFileData > module_file_data;
-            module_file_data.push_back({ test_vert_spv_file, test_vert_json_file });
-            module_file_data.push_back({ test_frag_spv_file, test_frag_json_file });
-
-            material_table.deserialize_module_data(module_file_data, shader_module_data);
+            shader_modules.push_back(renderer.create_shader_module("test_vert", test_vert_spv_file, test_vert_json_file));
+            shader_modules.push_back(renderer.create_shader_module("test_frag", test_frag_spv_file, test_frag_json_file));
         });
-    pipeline_layout = material_table.create_pipeline_layout_from_modules(shader_module_data);
+    pipeline_layout = renderer.create_pipeline_layout_from_modules(shader_module_data);
 
     // Create render passes and framebuffers
     // This is some temp code pretty much ripped from the vulkan tutorial. These
@@ -259,7 +255,7 @@ int main() {
         pipeline_create_info.layout = pipeline_layout;
         pipeline_create_info.renderPass = final_pass;
 
-        pipeline = material_table.request_pipeline(pipeline_create_info);
+        pipeline = renderer.request_pipeline(pipeline_create_info);
     }
 
     // TODO: Clear color is another per-attachment thing. This should be
