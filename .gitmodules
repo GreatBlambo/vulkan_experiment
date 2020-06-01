@@ -10,3 +10,6 @@
 [submodule "thirdparty/glm"]
 	path = thirdparty/glm
 	url = git@github.com:g-truc/glm.git
+[submodule "thirdparty/parallel-hashmap"]
+	path = thirdparty/parallel-hashmap
+	url = git@github.com:greg7mdp/parallel-hashmap.git
