@@ -33,7 +33,8 @@ template <>
 struct Equals< VkShaderModuleCreateInfo > {
     inline size_t operator()(const VkShaderModuleCreateInfo& l,
                              const VkShaderModuleCreateInfo& r) const {
-        return memcmp(l.pCode, r.pCode, std::min(l.codeSize, r.codeSize))
+        using namespace std;
+        return memcmp(l.pCode, r.pCode, min(l.codeSize, r.codeSize))
                && l.codeSize == r.codeSize;
     };
 };

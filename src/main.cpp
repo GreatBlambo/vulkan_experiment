@@ -32,7 +32,7 @@ int main() {
     Vulkan::App app(1920, 1080, "App", device_config);
 
     // Create vulkan resources
-    Vulkan::Renderer renderer(app, app_heap);
+    Vulkan::ResourceManager renderer(app, app_heap);
 
     // TEMP CODE
     VkPipelineLayout pipeline_layout;
@@ -49,8 +49,8 @@ int main() {
             const Memory::Buffer& test_frag_spv_file  = results[2];
             const Memory::Buffer& test_frag_json_file = results[3];
 
-            shader_modules.push_back(renderer.create_shader_module("test_vert", test_vert_spv_file, test_vert_json_file));
-            shader_modules.push_back(renderer.create_shader_module("test_frag", test_frag_spv_file, test_frag_json_file));
+            shader_modules.push_back(renderer.request_shader_module("test_vert", test_vert_spv_file, test_vert_json_file));
+            shader_modules.push_back(renderer.request_shader_module("test_frag", test_frag_spv_file, test_frag_json_file));
         });
     pipeline_layout = renderer.create_pipeline_layout_from_modules(shader_module_data);
 

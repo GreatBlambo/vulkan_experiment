@@ -42,9 +42,9 @@ inline bool is_power_of_2(const size_t n) {
 #define LOG_WARNING(format, ...)
 #define LOG_INFO(format, ...)
 
-#define ASSERT_MSG(cond, msg, ...) cond
-#define ASSERT_WARN(cond, msg, ...) cond
-#define ASSERT(cond) cond
+#define ASSERT_MSG(cond, msg, ...)
+#define ASSERT_WARN(cond, msg, ...)
+#define ASSERT(cond)
 #endif
 
 #define IMPLEMENT_ME_DESC(feature_name, ...) RUNTIME_ERROR("Feature not implemented: " feature_name, ##__VA_ARGS__) 

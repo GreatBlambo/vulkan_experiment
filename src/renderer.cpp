@@ -92,76 +92,6 @@ static TypeInfo get_type_info(const char* type_name,
     }
 }
 
-/*
-static void deserialize_vertex_layout_data(const Memory::Buffer& layout_json,
-                                    VertexLayoutData& out_layout_data) {
-    // Deserialize schema
-    rapidjson::Document schema_doc;
-    size_t schema_data_size = 0;
-    const char* schema_data
-        = StaticResource::accessor("vertex_layout_schema.json", &schema_data_size);
-    ASSERT(schema_data_size > 0);
-    ASSERT(schema_data != nullptr);
-    ASSERT(!schema_doc.Parse(schema_data, schema_data_size).HasParseError());
-
-    rapidjson::SchemaDocument schema(schema_doc);
-    rapidjson::SchemaValidator validator(schema);
-
-    // Parse layout json
-    rapidjson::Document layout_doc;
-    ASSERT(!layout_doc.Parse((const char*) layout_json.data, layout_json.size).HasParseError());
-
-    // Validate json confirms to schema
-    if (!layout_doc.Accept(validator)) {
-        rapidjson::StringBuffer sb;
-        validator.GetInvalidSchemaPointer().StringifyUriFragment(sb);
-        LOG_ERROR("Invalid object: %s", sb.GetString());
-        LOG_ERROR("Invalid attribute: %s", validator.GetInvalidSchemaKeyword());
-        sb.Clear();
-        validator.GetInvalidDocumentPointer().StringifyUriFragment(sb);
-        RUNTIME_ERROR("Invalid document: %s", sb.GetString());
-    }
-
-    // Load values from json
-    auto root = layout_doc.GetObject();
-
-    auto bindings = root["bindings"].GetArray();
-    for (size_t i = 0; i < bindings.Size(); i++) {
-        auto binding = bindings[i].GetObject();
-
-        VkVertexInputBindingDescription binding_desc = {};
-        binding_desc.binding                         = binding["binding"].GetInt();
-        binding_desc.inputRate = get_vertex_input_rate(binding["input_rate"].GetString());
-        binding_desc.stride    = 0;
-
-        size_t current_stride = 0;
-
-        auto attributes = binding["attributes"].GetArray();
-        for (size_t j = 0; j < attributes.Size(); j++) {
-            auto attribute = attributes[j].GetObject();
-
-            TypeInfo type_info = get_type_info(attribute["type"].GetString());
-
-            VertexLayoutData::AttributeDescription attribute_desc;
-            attribute_desc.name   = attribute["name"].GetString();
-            attribute_desc.format = type_info.format;
-            attribute_desc.offset
-                = attribute.HasMember("offset") ? attribute["offset"].GetInt() : current_stride;
-            attribute_desc.binding = binding_desc.binding;
-
-            ASSERT(attribute_desc.offset >= current_stride);
-
-            current_stride = attribute_desc.offset + type_info.data_size;
-
-            out_layout_data.input_attributes.push_back(attribute_desc);
-        }
-
-        binding_desc.stride = current_stride;
-        out_layout_data.input_bindings.push_back(binding_desc);
-    }
-}
-*/
-
 static VkDescriptorType get_descriptor_type(const char* node_name, const char* type) {
     VkDescriptorType result = VK_DESCRIPTOR_TYPE_MAX_ENUM;
     unsigned long node_hash = Hash::djb2_hash(node_name);
@@ -179,7 +109,7 @@ static VkDescriptorType get_descriptor_type(const char* node_name, const char* t
     return result;
 }
 
-void Renderer::deserialize_reflection_data(const Memory::Buffer& reflection_json,
+void ResourceManager::deserialize_reflection_data(const Memory::Buffer& reflection_json,
                                            ShaderModuleCreateInfo& out_reflection_data) {
     rapidjson::Document document;
     document.Parse((const char*) reflection_json.data, reflection_json.size);
@@ -229,7 +159,7 @@ void Renderer::deserialize_reflection_data(const Memory::Buffer& reflection_json
                 ShaderResourceCreateInfo::VertexInput& input_attrib
                     = out_reflection_data.resource_info.vertex_inputs[location];
                 input_attrib.format = get_type_info(input["type"].GetString()).format;
-                input_attrib.name   = allocator.copy_string(input["name"].GetString());
+                input_attrib.name   = m_allocator.copy_string(input["name"].GetString());
             }
         }
     } else if (strcmp("frag", mode) == 0) {
@@ -242,7 +172,7 @@ void Renderer::deserialize_reflection_data(const Memory::Buffer& reflection_json
         out_reflection_data.stage = VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
     }
 
-    auto& string_allocator                 = this->string_allocator;
+    auto& string_allocator                 = this->m_string_allocator;
     const auto add_descriptor_set_bindings = [&out_reflection_data, &root,
                                               &string_allocator](const char* node_name) {
         if (root.HasMember(node_name)) {
@@ -340,39 +270,39 @@ static BufferLayout* get_default_mesh_layout() {
     return &layout;
 }
 
-Renderer::Renderer(Vulkan::App& app, Memory::IAllocator& allocator)
-    : app(app)
-    , allocator(allocator)
-    , string_allocator(KB(10), allocator) {
+ResourceManager::ResourceManager(Vulkan::App& app, Memory::IAllocator& allocator)
+    : m_app(app)
+    , m_allocator(allocator)
+    , m_string_allocator(KB(10), allocator) {
     VkPipelineCacheCreateInfo pipeline_cache_create_info = {};
     pipeline_cache_create_info.sType           = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
     pipeline_cache_create_info.initialDataSize = 0;
-    VK_CHECK(vkCreatePipelineCache(app.device, &pipeline_cache_create_info, nullptr,
-                                   &this->pipeline_cache));
+    VK_CHECK(vkCreatePipelineCache(m_app.device, &pipeline_cache_create_info, nullptr,
+                                   &this->m_pipeline_cache));
 }
 
-Renderer::~Renderer() {
-    for (const auto& shader_module : shader_modules) {
-        vkDestroyShaderModule(app.device, shader_module.second, nullptr);
+ResourceManager::~ResourceManager() {
+    for (const auto& shader_module : m_shader_modules) {
+        vkDestroyShaderModule(m_app.device, shader_module.second, nullptr);
     }
 
-    for (const auto& descriptor_set_layout : descriptor_set_layout_cache) {
-        vkDestroyDescriptorSetLayout(app.device, descriptor_set_layout.second, nullptr);
+    for (const auto& descriptor_set_layout : m_descriptor_set_layout_cache) {
+        vkDestroyDescriptorSetLayout(m_app.device, descriptor_set_layout.second, nullptr);
     }
 
-    for (const auto& pipeline_layout : pipeline_layout_cache) {
-        vkDestroyPipelineLayout(app.device, pipeline_layout.second, nullptr);
+    for (const auto& pipeline_layout : m_pipeline_layout_cache) {
+        vkDestroyPipelineLayout(m_app.device, pipeline_layout.second, nullptr);
     }
 
-    for (const auto& pipeline : pipelines) {
-        vkDestroyPipeline(app.device, pipeline, nullptr);
+    for (const auto& pipeline : m_pipelines) {
+        vkDestroyPipeline(m_app.device, pipeline, nullptr);
     }
 
-    vkDestroyPipelineCache(app.device, pipeline_cache, nullptr);
-    string_allocator.release();
+    vkDestroyPipelineCache(m_app.device, m_pipeline_cache, nullptr);
+    m_string_allocator.release();
 }
 
-ShaderModule Renderer::create_shader_module(const char* name, const Memory::Buffer& spirv_source,
+ShaderModule ResourceManager::request_shader_module(const char* name, const Memory::Buffer& spirv_source,
                                             const ShaderModuleCreateInfo& create_info) {
     VkShaderModuleCreateInfo vk_create_info = {};
     vk_create_info.sType                    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -380,37 +310,37 @@ ShaderModule Renderer::create_shader_module(const char* name, const Memory::Buff
     vk_create_info.pCode                    = (uint32_t*) spirv_source.size;
 
     VkShaderModule vk_module;
-    VK_CHECK(vkCreateShaderModule(app.device, &vk_create_info, nullptr, &vk_module));
+    VK_CHECK(vkCreateShaderModule(m_app.device, &vk_create_info, nullptr, &vk_module));
 
-    shader_modules.push_back(
+    m_shader_modules.push_back(
         std::pair< ShaderModuleCreateInfo, VkShaderModule >(create_info, vk_module));
 
-    ShaderModule id = { shader_modules.size() - 1 };
+    ShaderModule id = { m_shader_modules.size() - 1 };
 
-    name_to_shader_module[name] = id;
+    m_name_to_shader_module[name] = id;
     return id;
 }
 
-ShaderModule Renderer::create_shader_module(const char* name, const Memory::Buffer& spirv_source,
+ShaderModule ResourceManager::request_shader_module(const char* name, const Memory::Buffer& spirv_source,
                                             const Memory::Buffer& reflection_json) {
     ShaderModuleCreateInfo new_shader_module;
     deserialize_reflection_data(reflection_json, new_shader_module);
 
-    return create_shader_module(name, spirv_source, new_shader_module);
+    return request_shader_module(name, spirv_source, new_shader_module);
 }
 
-VkPipeline Renderer::request_pipeline(const VkGraphicsPipelineCreateInfo& create_info) {
+VkPipeline ResourceManager::request_pipeline(const VkGraphicsPipelineCreateInfo& create_info) {
     VkPipeline pipeline;
-    VK_CHECK(vkCreateGraphicsPipelines(app.device, this->pipeline_cache, 1, &create_info, nullptr,
+    VK_CHECK(vkCreateGraphicsPipelines(m_app.device, this->m_pipeline_cache, 1, &create_info, nullptr,
                                        &pipeline));
-    pipelines.push_back(pipeline);
+    m_pipelines.push_back(pipeline);
     return pipeline;
 }
 
 VkDescriptorSetLayout
-Renderer::request_descriptor_set_layout(const DescriptorSetLayoutCreateInfo& create_info) {
-    auto it = descriptor_set_layout_cache.find(create_info);
-    if (it != descriptor_set_layout_cache.end()) {
+ResourceManager::request_descriptor_set_layout(const DescriptorSetLayoutCreateInfo& create_info) {
+    auto it = m_descriptor_set_layout_cache.find(create_info);
+    if (it != m_descriptor_set_layout_cache.end()) {
         return it->second;
     }
 
@@ -436,15 +366,15 @@ Renderer::request_descriptor_set_layout(const DescriptorSetLayoutCreateInfo& cre
     }
 
     VkDescriptorSetLayout set_layout;
-    VK_CHECK(vkCreateDescriptorSetLayout(app.device, &vk_create_info, nullptr, &set_layout));
+    VK_CHECK(vkCreateDescriptorSetLayout(m_app.device, &vk_create_info, nullptr, &set_layout));
 
-    descriptor_set_layout_cache[create_info] = set_layout;
+    m_descriptor_set_layout_cache[create_info] = set_layout;
     return set_layout;
 }
 
-VkPipelineLayout Renderer::request_pipeline_layout(const PipelineLayoutCreateInfo& create_info) {
-    auto it = pipeline_layout_cache.find(create_info);
-    if (it != pipeline_layout_cache.end()) {
+VkPipelineLayout ResourceManager::request_pipeline_layout(const PipelineLayoutCreateInfo& create_info) {
+    auto it = m_pipeline_layout_cache.find(create_info);
+    if (it != m_pipeline_layout_cache.end()) {
         return it->second;
     }
 
@@ -467,9 +397,9 @@ VkPipelineLayout Renderer::request_pipeline_layout(const PipelineLayoutCreateInf
     }
 
     VkPipelineLayout pipeline_layout;
-    VK_CHECK(vkCreatePipelineLayout(app.device, &vk_create_info, nullptr, &pipeline_layout));
+    VK_CHECK(vkCreatePipelineLayout(m_app.device, &vk_create_info, nullptr, &pipeline_layout));
 
-    pipeline_layout_cache[create_info] = pipeline_layout;
+    m_pipeline_layout_cache[create_info] = pipeline_layout;
     return pipeline_layout;
 }
 
@@ -543,6 +473,52 @@ void render_frame(Vulkan::App& app, const std::function< void(const size_t, VkCo
         present_info.pImageIndices      = &image_index;
 
         VK_CHECK(vkQueuePresentKHR(app.present_queue, &present_info));
+    }
+}
+
+const App& ResourceManager::app() {
+    return m_app;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// RenderProgram
+////////////////////////////////////////////////////////////////////////////////
+
+RenderProgram::RenderProgram(const RenderProgramConfig& config, 
+                             ResourceManager& resource_manager)
+    : m_resource_manager(resource_manager) {
+    bake(config);
+}
+
+RenderProgram::~RenderProgram() {
+    clean();
+}
+
+void RenderProgram::clean() {
+    const Vulkan::App& app = m_resource_manager.app();
+    for (auto& attachment : m_attachments) {
+        // Delete attachments
+        vkDestroyImage(app.device, attachment.vk_image, nullptr);
+        vkDestroyImageView(app.device, attachment.vk_image_view, nullptr);
+    }
+    
+    for (auto& render_pass : m_render_passes) {
+        // Delete render passes
+        vkDestroyRenderPass(app.device, render_pass.vk_render_pass, nullptr);
+    }
+}
+
+void RenderProgram::bake(const RenderProgramConfig& config) {
+    // TODO: Eventually replace this with a more sophisticated function
+    // one that detects dependencies and attachment images etc. We also
+    // probably want to reuse framebuffers somehow
+    clean();
+
+    m_attachments.resize(config.num_attachments);
+    m_render_passes.resize(config.num_render_passes);
+
+    for (size_t i = 0; i < config.num_attachments; i++) {
+        Attachment new_attachment = {};
     }
 }
 

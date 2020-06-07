@@ -26,7 +26,29 @@ add_subdirectory(shaders)
 set(CMAKE_EXPORT_COMPILE_COMMANDS true)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/app)
 
-file(GLOB CPP_SOURCES "src/*.cpp")
+file(GLOB CPP_SOURCES "src/*.cpp" "src/*.h")
+if (0)
+    set(CPP_SOURCES
+        "src/file_system.cpp"
+        "src/file_system.h"
+        "src/handle.h"
+        "src/hash.h"
+        "src/main.cpp"
+        "src/memory.cpp"
+        "src/platform.cpp"
+        "src/platform.h"
+        "src/renderer.cpp"
+        "src/renderer.h"
+        "src/utils.cpp"
+        "src/utils.h"
+        "src/vulkan_app.cpp"
+        "src/vulkan_app.h"
+        "src/vulkan_types.h"
+        "src/vulkan_utils.cpp"
+        "src/vulkan_utils.h"
+    )
+endif()
+
 add_executable(${PROJECT_NAME} ${CPP_SOURCES})
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${PHYSFS_INCLUDE_DIR} ${RAPIDJSON_INCLUDE_DIR} ${PHMAP_INCLUDE_DIR})
