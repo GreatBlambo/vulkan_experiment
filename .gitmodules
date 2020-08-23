@@ -1,15 +1,15 @@
 [submodule "thirdparty/glfw"]
 	path = thirdparty/glfw
-	url = git@github.com:glfw/glfw.git
+	url = https://github.com/glfw/glfw.git
 [submodule "thirdparty/physfs"]
 	path = thirdparty/physfs
 	url = https://github.com/criptych/physfs.git
 [submodule "thirdparty/rapidjson"]
 	path = thirdparty/rapidjson
-	url = git@github.com:Tencent/rapidjson.git
+	url = https://github.com/Tencent/rapidjson.git
 [submodule "thirdparty/glm"]
 	path = thirdparty/glm
-	url = git@github.com:g-truc/glm.git
+	url = https://github.com/g-truc/glm.git
 [submodule "thirdparty/parallel-hashmap"]
 	path = thirdparty/parallel-hashmap
-	url = git@github.com:greg7mdp/parallel-hashmap.git
+	url = https://github.com/greg7mdp/parallel-hashmap.git

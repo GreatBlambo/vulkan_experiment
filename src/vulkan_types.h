@@ -5,6 +5,7 @@
 
 #include "utils.h"
 #include "hash.h"
+#include "memory.h"
 
 #define VULKAN_MAX_DESCRIPTOR_SETS 8
 #define VULKAN_MAX_DESCRIPTOR_BINDINGS 16
@@ -103,7 +104,7 @@ struct PipelineLayoutCreateInfo {
     }
 
     VkDescriptorSetLayout descriptor_set_layouts[VULKAN_MAX_DESCRIPTOR_SETS];
-    VkPushConstantRange push_constant_range;
+    VkPushConstantRange push_constant_range = {};
 
     inline friend size_t hash_value(const PipelineLayoutCreateInfo& info) {
         size_t hash = 0;
@@ -128,5 +129,28 @@ struct PipelineLayoutCreateInfo {
         return Equals< VkPushConstantRange >()(push_constant_range, other.push_constant_range);
     }
 };
+
+struct ShaderResourceCreateInfo {
+    struct VertexInput {
+        const char* name;
+        VkFormat format;
+    };
+
+    VertexInput vertex_inputs[VULKAN_MAX_VERTEX_INPUTS];
+    DescriptorBinding descriptor_bindings[VULKAN_MAX_DESCRIPTOR_SETS][VULKAN_MAX_DESCRIPTOR_BINDINGS];
+};
+
+struct ShaderModuleCreateInfo {
+    const char* entry_point;
+    VkShaderStageFlagBits stage;
+    ShaderResourceCreateInfo resource_info;
+};
+
+struct ShaderSource {
+    const char* name;
+    const Memory::Buffer spirv_source;
+    const Memory::Buffer reflection_json;
+};
+
 
 }    // namespace Vulkan

@@ -26,7 +26,7 @@ add_subdirectory(shaders)
 set(CMAKE_EXPORT_COMPILE_COMMANDS true)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/app)
 
-file(GLOB CPP_SOURCES "src/*.cpp" "src/*.h")
+file(GLOB CPP_SOURCES "src/*.cpp" "src/*.h" "src/demos/*.cpp" "src/demos/*.h")
 if (0)
     set(CPP_SOURCES
         "src/file_system.cpp"

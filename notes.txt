@@ -52,3 +52,26 @@ On pipeline layout creation:
 
 Need to do a test run. Create a render pass and pipeline _in code_ to see if the
 layout works.
+
+---
+
+8/21
+
+Simplifying. Forget about render program stuff for now.
+
+Long term though:
+
+(build time) steps are done at build time. Could probably just write python for these
+
+Stage 1 (build time): Render programs are built and validated at build time. This is
+basically like linking shaders together. Pass dependencies, resources, and (maybe) 
+pass order are specified via a DSL (or maybe just json).
+
+Output of this stage is parameters to construct layout objects and pipeline objects,
+and an IR for sequential pass calls/synchronization and stuff
+
+Stage 2 (build time) (optional): Materials are validated against parameters for layout 
+objects. These are just bags of resources which match with a pipeline.
+
+Stage 3 (runtime): Layout objects, pipelines, and materials are loaded into actual VK
+resources. Execute IR for render programs
