@@ -10,6 +10,7 @@
 #define VULKAN_MAX_DESCRIPTOR_SETS 8
 #define VULKAN_MAX_DESCRIPTOR_BINDINGS 16
 #define VULKAN_MAX_VERTEX_INPUTS 8
+#define VULKAN_MAX_PUSH_CONSTANT_RANGES 1
 
 namespace Hash {
 template <>
@@ -104,7 +105,8 @@ struct PipelineLayoutCreateInfo {
     }
 
     VkDescriptorSetLayout descriptor_set_layouts[VULKAN_MAX_DESCRIPTOR_SETS];
-    VkPushConstantRange push_constant_range = {};
+    VkPushConstantRange push_constant_ranges[VULKAN_MAX_PUSH_CONSTANT_RANGES];
+    size_t num_push_constant_ranges = 0;
 
     inline friend size_t hash_value(const PipelineLayoutCreateInfo& info) {
         size_t hash = 0;
@@ -115,8 +117,12 @@ struct PipelineLayoutCreateInfo {
             }
             hash = state.combine(hash, info.descriptor_set_layouts[i]);
         }
-        return state.combine(hash, info.push_constant_range.offset, info.push_constant_range.size,
-                             info.push_constant_range.stageFlags);
+        for (size_t i = 0; i < info.num_push_constant_ranges; i++) {
+            hash = state.combine(hash, info.push_constant_ranges[i].offset,
+                                 info.push_constant_ranges[i].size,
+                                 info.push_constant_ranges[i].stageFlags);
+        }
+        return hash;
     }
 
     inline bool operator==(const PipelineLayoutCreateInfo& other) const {
@@ -126,7 +132,19 @@ struct PipelineLayoutCreateInfo {
             }
         }
 
-        return Equals< VkPushConstantRange >()(push_constant_range, other.push_constant_range);
+        if (num_push_constant_ranges != other.num_push_constant_ranges) {
+            return false;
+        }
+
+        for (size_t i = 0; i < num_push_constant_ranges; i++) {
+            if (!Equals< VkPushConstantRange >()(
+                push_constant_ranges[i], 
+                other.push_constant_ranges[i])) {
+                return false;
+            }
+        }
+
+        return true;
     }
 };
 

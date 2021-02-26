@@ -1,4 +1,6 @@
 {
     "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
-    "C_Cpp.default.compileCommands": "build/compile_commands.json"
+    "C_Cpp.default.compileCommands": "build/compile_commands.json",
+    "python.linting.pylintEnabled": true,
+    "python.linting.enabled": true
 }

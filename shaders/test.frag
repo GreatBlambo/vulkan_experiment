@@ -7,7 +7,7 @@ struct MVP {
     mat4 proj;
 };
 
-layout(binding = 0) uniform UniformBufferObject {
+layout(set = 4, binding = 0) uniform UniformBufferObject {
     MVP mvp;
 } ubo;
 

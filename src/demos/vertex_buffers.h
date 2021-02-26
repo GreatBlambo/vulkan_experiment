@@ -5,7 +5,7 @@
 
 #include "demo.h"
 
-class TriangleDemo : public Demo {
+class VertexBuffersDemo : public Demo {
   public:
     void init(Vulkan::App& app, Vulkan::ResourceManager& resource_manager,
               Memory::VirtualHeap& demo_heap);

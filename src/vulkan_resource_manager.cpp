@@ -404,12 +404,8 @@ VkPipelineLayout ResourceManager::request_pipeline_layout(const PipelineLayoutCr
 
     VkPipelineLayoutCreateInfo vk_create_info = {};
     vk_create_info.sType                      = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    if (create_info.push_constant_range.size == 0) {
-        vk_create_info.pPushConstantRanges = &create_info.push_constant_range;
-    } else {
-        vk_create_info.pPushConstantRanges = nullptr;
-    }
-    vk_create_info.pushConstantRangeCount     = 1;
+    vk_create_info.pPushConstantRanges        = create_info.push_constant_ranges;
+    vk_create_info.pushConstantRangeCount     = create_info.num_push_constant_ranges;
     vk_create_info.pSetLayouts                = set_layouts;
     vk_create_info.setLayoutCount             = 0;
 

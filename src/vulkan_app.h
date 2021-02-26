@@ -49,6 +49,7 @@ struct FrameResources {
 
 struct App {
     App(int width, int height, const char* name, const DeviceConfig& in_device_config = {});
+    void wait_for_device();
     ~App();
 
     GLFWwindow* window;

@@ -93,7 +93,7 @@
             "type" : "_22",
             "name" : "UniformBufferObject",
             "block_size" : 192,
-            "set" : 0,
+            "set" : 4,
             "binding" : 0
         },
         {

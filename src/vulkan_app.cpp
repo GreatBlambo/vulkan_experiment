@@ -685,6 +685,10 @@ App::App(int width, int height, const char* name,
     LOG_DEBUG("Vulkan app initialized");
 }
 
+void App::wait_for_device() {
+    vkDeviceWaitIdle(device);
+}
+
 App::~App() {
     vkQueueWaitIdle(graphics_queue);
     vkQueueWaitIdle(present_queue);
@@ -696,11 +700,6 @@ App::~App() {
         vkDestroySemaphore(device,
                            frame_resources[i].draw_complete_semaphore, NULL);
     }
-
-    // TODO Delete render passes
-    LOG_WARNING("CURRENTLY LEAKING RENDER PASSES");
-    // TODO Delete framebuffers
-    LOG_WARNING("CURRENTLY LEAKING FRAMEBUFFERS");
 
     vkDestroyCommandPool(device, command_pool, NULL);
     for (size_t i = 0; i < swapchain_images.size(); i++) {

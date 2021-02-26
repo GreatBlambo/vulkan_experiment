@@ -12,17 +12,22 @@
 
 #include "demos/demo.h"
 #include "demos/triangle.h"
+#include "demos/vertex_buffers.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // App main /////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Triangle demo_triangle;
+static TriangleDemo triangle_demo;
+static VertexBuffersDemo vertex_buffers_demo;
 static Demo* demos[] = {
-    &demo_triangle
+    &triangle_demo,
+    &vertex_buffers_demo
 };
-static Demo* current_demo = nullptr;
+static int current_demo_index = -1;
+
+void end_demo(int demo_index, Vulkan::App& app);
 
 void start_demo(int demo_index,
                 Vulkan::App& app,
@@ -31,25 +36,38 @@ void start_demo(int demo_index,
     if (demo_index < 0 || demo_index >= ARRAYSIZE(demos)) {
         return;
     }
-    if (current_demo == demos[demo_index]) {
+    if (current_demo_index == demo_index) {
         return;
     }
 
     // Destroy current demo
-    if (current_demo) {
-        current_demo->destroy(app);
-    }
+    end_demo(demo_index, app);
     resource_manager.clear();
     demo_heap.clear();
 
-    current_demo = demos[demo_index];
-    current_demo->init(app, resource_manager, demo_heap);
+    current_demo_index = demo_index;
+    demos[current_demo_index]->init(app, resource_manager, demo_heap);
+}
+
+void step_demo(int demo_index, 
+               Vulkan::App& app, 
+               Vulkan::ResourceManager& resource_manager,
+               Memory::VirtualHeap& frame_heap) {
+    demos[demo_index]->render(app, resource_manager, frame_heap);
+}
+
+void end_demo(int demo_index, Vulkan::App& app) {
+    if (demo_index < 0) {
+        return;
+    }
+    app.wait_for_device();
+    demos[demo_index]->destroy(app);
 }
 
 int main() {
     Memory::VirtualHeap app_heap(GB(8));
     Memory::VirtualHeap demo_heap(GB(8));
-    Memory::VirtualHeap per_frame_heap(GB(8));
+    Memory::VirtualHeap frame_heap(GB(8));
 
     // Load external resources
     FileSystem::initialize("./");
@@ -70,12 +88,12 @@ int main() {
     // Render loop
     while (!glfwWindowShouldClose(app.window)) {
         glfwPollEvents();
-        per_frame_heap.clear();
-        current_demo->render(app, resource_manager, per_frame_heap);
+        frame_heap.clear();
+        step_demo(current_demo_index, app, resource_manager, frame_heap);
     }
 
     // Clean up resources
-    current_demo->destroy(app);
+    end_demo(current_demo_index, app);
 
     // Deinit fs
     FileSystem::deinit();

@@ -75,3 +75,20 @@ objects. These are just bags of resources which match with a pipeline.
 
 Stage 3 (runtime): Layout objects, pipelines, and materials are loaded into actual VK
 resources. Execute IR for render programs
+
+8/23
+
+Thinking again about stage 1 and 2, essentially they're automating
+the process of creating an optimal set of layouts and pipelines
+given a set of shaders...
+
+-- Vertex formats --
+Given a set of shaders, if a declared vertex format is compatible
+with an existing one (ie does not have a different attribute at a 
+location which is already taken by the current one) then merge
+the the formats.
+
+Should this be manual?
+
+TODO:
+  - Make accessors for create info wrappers, for safe access

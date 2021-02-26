@@ -1,0 +1,46 @@
+{
+    "passes": [
+        {
+            "name": "Test Pass",
+            "shaders": {
+                "vert": "shaders/test.vert.json",
+                "frag": "shaders/test.frag.json"
+            },
+            "input_layouts": [
+                {
+                    "type": "VERTEX_BUFFER",
+                    "bindings": [
+                        {
+                            "binding": 0,
+                            "attributes": [
+                                {
+                                    "name": "position",
+                                    "type": "vec3"
+                                },
+                                {
+                                    "name": "normal",
+                                    "type": "vec3"
+                                },
+                                {
+                                    "name": "uv",
+                                    "type": "vec2"
+                                }
+                            ],
+                            "input_rate": "vertex"
+                        },
+                        {
+                            "binding": 1,
+                            "attributes": [
+                                {
+                                    "name": "mvm",
+                                    "type": "mat4"
+                                }
+                            ],
+                            "input_rate": "instance"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

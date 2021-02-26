@@ -1,8 +1,8 @@
-#include "triangle.h"
+#include "vertex_buffers.h"
 #include "../vulkan_resource_manager.h"
 #include "../file_system.h"
 
-void TriangleDemo::init(Vulkan::App& app, Vulkan::ResourceManager& resource_manager, Memory::VirtualHeap& demo_heap) {
+void VertexBuffersDemo::init(Vulkan::App& app, Vulkan::ResourceManager& resource_manager, Memory::VirtualHeap& demo_heap) {
     const char* shader_files[] = { "shaders/triangle.vert.spv", "shaders/triangle.vert.json",
                                    "shaders/triangle.frag.spv", "shaders/triangle.frag.json" };
 
@@ -223,7 +223,7 @@ void TriangleDemo::init(Vulkan::App& app, Vulkan::ResourceManager& resource_mana
     }
 }
 
-void TriangleDemo::render(Vulkan::App& app, Vulkan::ResourceManager& resource_manager, Memory::VirtualHeap& frame_heap) {
+void VertexBuffersDemo::render(Vulkan::App& app, Vulkan::ResourceManager& resource_manager, Memory::VirtualHeap& frame_heap) {
     // TODO: Clear color is another per-attachment thing. This should be
     // pulled from pass config
     VkClearValue clear_color = {0.5f, 0.0f, 0.25f, 1.0f};
@@ -256,7 +256,7 @@ void TriangleDemo::render(Vulkan::App& app, Vulkan::ResourceManager& resource_ma
     });
 }
 
-void TriangleDemo::destroy(Vulkan::App& app) {
+void VertexBuffersDemo::destroy(Vulkan::App& app) {
     vkDestroyRenderPass(app.device, final_pass, nullptr);
     for (auto& framebuffer : swapchain_framebuffers) {
         vkDestroyFramebuffer(app.device, framebuffer, nullptr);
